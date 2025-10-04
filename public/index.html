@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎤 SpeechHub - Universal STT Platform</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1><i class="fas fa-microphone"></i> SpeechHub</h1>
+            <p class="subtitle">Universal Speech-to-Text Platform</p>
+            <p class="description">Compare and evaluate Whisper, Voxtral, Parakeet, and Canary-Qwen models</p>
+        </header>
+
+        <!-- Theme Toggle -->
+        <div class="theme-toggle">
+            <button id="themeToggle" class="btn-icon">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+
+        <!-- Status Bar -->
+        <div id="statusBar" class="status-bar">
+            <div class="status-item">
+                <span class="status-label">Device:</span>
+                <span id="deviceStatus" class="status-value">Loading...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Dependencies:</span>
+                <span id="dependencyStatus" class="status-value">Checking...</span>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Mode Selection -->
+            <div class="mode-selection">
+                <h3>Mode Selection</h3>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="mode" value="single" checked>
+                        <span class="radio-custom"></span>
+                        Single Model
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="mode" value="compare">
+                        <span class="radio-custom"></span>
+                        Compare Models
+                    </label>
+                </div>
+            </div>
+
+            <!-- Model Selection -->
+            <div id="modelSelection" class="model-selection">
+                <h3>Model Selection</h3>
+                <div id="singleModelSelect" class="single-model-select">
+                    <div class="form-group">
+                        <label for="engineSelect">Engine:</label>
+                        <select id="engineSelect" class="form-control">
+                            <option value="">Select Engine...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="modelSelect">Model:</label>
+                        <select id="modelSelect" class="form-control">
+                            <option value="">Select Model...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="compareModelSelect" class="compare-model-select" style="display: none;">
+                    <p class="info-text">Select models to compare (minimum 2):</p>
+                    <div id="compareModels" class="compare-models-grid">
+                        <!-- Dynamic model checkboxes will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Upload -->
+            <div class="file-upload-section">
+                <h3>Audio Upload</h3>
+                <div class="file-upload-area" id="fileUploadArea">
+                    <div class="upload-content">
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <p class="upload-text">Drag & drop audio file here or click to browse</p>
+                        <p class="upload-formats">Supported: WAV, MP3, FLAC, M4A, OGG</p>
+                        <input type="file" id="audioFile" accept=".wav,.mp3,.flac,.m4a,.ogg" hidden>
+                    </div>
+                </div>
+                
+                <div id="fileInfo" class="file-info" style="display: none;">
+                    <div class="file-details">
+                        <i class="fas fa-file-audio"></i>
+                        <div class="file-meta">
+                            <span id="fileName" class="file-name"></span>
+                            <span id="fileSize" class="file-size"></span>
+                        </div>
+                    </div>
+                    <audio id="audioPreview" controls class="audio-preview"></audio>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-section">
+                <button id="transcribeBtn" class="btn btn-primary" disabled>
+                    <i class="fas fa-play"></i>
+                    <span id="transcribeBtnText">Transcribe</span>
+                </button>
+                <button id="compareBtn" class="btn btn-secondary" style="display: none;" disabled>
+                    <i class="fas fa-balance-scale"></i>
+                    <span id="compareBtnText">Compare Models</span>
+                </button>
+            </div>
+
+            <!-- Progress -->
+            <div id="progressSection" class="progress-section" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <p id="progressText" class="progress-text">Processing...</p>
+            </div>
+
+            <!-- Results -->
+            <div id="resultsSection" class="results-section" style="display: none;">
+                <h3>Results</h3>
+                <div id="resultsContent" class="results-content">
+                    <!-- Results will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <h4><i class="fas fa-cogs"></i> Dependencies</h4>
+                <div id="dependencyList" class="dependency-list">
+                    <div class="dependency-item">
+                        <span class="dependency-name">Voxtral Support:</span>
+                        <span id="voxtralStatus" class="dependency-status">Checking...</span>
+                        <button id="installVoxtral" class="btn-install" style="display: none;">
+                            <i class="fas fa-download"></i> Install
+                        </button>
+                    </div>
+                    <div class="dependency-item">
+                        <span class="dependency-name">NeMo Support:</span>
+                        <span id="nemoStatus" class="dependency-status">Checking...</span>
+                        <button id="installNemo" class="btn-install" style="display: none;">
+                            <i class="fas fa-download"></i> Install
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h4><i class="fas fa-database"></i> Cache Status</h4>
+                <div id="cacheInfo" class="cache-info">
+                    <p id="cacheStatus">Loading cache information...</p>
+                    <div id="cachedModels" class="cached-models">
+                        <!-- Cached models will be listed here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h4><i class="fas fa-info-circle"></i> Model Info</h4>
+                <div class="model-comparison">
+                    <div class="model-card">
+                        <h5>Whisper</h5>
+                        <ul>
+                            <li>✅ Detailed timestamps</li>
+                            <li>✅ Multiple model sizes</li>
+                            <li>✅ Fast processing</li>
+                            <li>✅ Lower resource requirements</li>
+                        </ul>
+                    </div>
+                    <div class="model-card">
+                        <h5>Voxtral</h5>
+                        <ul>
+                            <li>✅ Advanced audio understanding</li>
+                            <li>✅ Multilingual support</li>
+                            <li>✅ Long-form context (30 min)</li>
+                            <li>🔧 Requires transformers 4.56.0+</li>
+                        </ul>
+                    </div>
+                    <div class="model-card">
+                        <h5>NVIDIA (Parakeet & Canary)</h5>
+                        <ul>
+                            <li>✅ NVIDIA optimized models</li>
+                            <li>✅ Fast inference</li>
+                            <li>✅ Parakeet: Timestamps support</li>
+                            <li>✅ Canary: State-of-the-art English ASR</li>
+                            <li>🔧 Requires NeMo toolkit</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p id="loadingText">Processing...</p>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
