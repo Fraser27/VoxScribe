@@ -591,6 +591,44 @@ body {
     margin-bottom: 0.25rem;
 }
 
+/* Recent Logs */
+.recent-logs {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.75rem;
+}
+
+.log-entry {
+    padding: 0.25rem;
+    margin-bottom: 0.25rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+}
+
+.log-entry.success {
+    border-left: 3px solid var(--success-color);
+}
+
+.log-entry.error {
+    border-left: 3px solid var(--error-color);
+}
+
+.log-entry.info {
+    border-left: 3px solid var(--info-color);
+}
+
+.log-timestamp {
+    color: var(--text-secondary);
+    font-size: 0.7rem;
+}
+
+.log-message {
+    color: var(--text-primary);
+    font-size: 0.75rem;
+    margin-top: 0.125rem;
+}
+
 /* Loading Overlay */
 .loading-overlay {
     position: fixed;

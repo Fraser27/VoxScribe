@@ -9,6 +9,7 @@ import json
 import time
 import tempfile
 import subprocess
+import logging
 from pathlib import Path
 from typing import List, Dict, Optional, Any
 import datetime
@@ -52,6 +53,234 @@ MAX_RECOMMENDED_DURATION = 30 * 60
 
 # Base model directory
 BASE_MODELS_DIR = Path(os.getcwd()) / "models"
+
+
+# Setup logging
+def setup_logger():
+    """Setup comprehensive logging for SpeechHub."""
+    # Create logs directory
+    logs_dir = Path("logs")
+    logs_dir.mkdir(exist_ok=True)
+
+    # Create logger
+    logger = logging.getLogger("speechhub")
+    logger.setLevel(logging.INFO)
+
+    # Remove existing handlers to avoid duplicates
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # Create formatters
+    detailed_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+
+    # File handler for all logs
+    file_handler = logging.FileHandler(logs_dir / "speechhub.log")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(detailed_formatter)
+
+    # File handler for errors only
+    error_handler = logging.FileHandler(logs_dir / "errors.log")
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(detailed_formatter)
+
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+
+    # Add handlers
+    logger.addHandler(file_handler)
+    logger.addHandler(error_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
+# Initialize logger
+logger = setup_logger()
+
+
+class TranscriptionLogger:
+    """Specialized logger for tracking transcription activities."""
+
+    def __init__(self):
+        self.logs_dir = Path("logs")
+        self.logs_dir.mkdir(exist_ok=True)
+        self.transcription_log = self.logs_dir / "transcriptions.jsonl"
+        self.model_usage_log = self.logs_dir / "model_usage.jsonl"
+
+    def log_transcription_start(
+        self, engine: str, model_id: str, filename: str, file_size: int
+    ):
+        """Log the start of a transcription."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "transcription_start",
+            "engine": engine,
+            "model_id": model_id,
+            "filename": filename,
+            "file_size_bytes": file_size,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+        logger.info(
+            f"Starting transcription: {engine}/{model_id} for {filename} ({file_size} bytes)"
+        )
+
+    def log_transcription_complete(
+        self,
+        engine: str,
+        model_id: str,
+        filename: str,
+        processing_time: float,
+        duration: float,
+        success: bool,
+        error: str = None,
+    ):
+        """Log the completion of a transcription."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "transcription_complete",
+            "engine": engine,
+            "model_id": model_id,
+            "filename": filename,
+            "processing_time_seconds": processing_time,
+            "audio_duration_seconds": duration,
+            "success": success,
+            "error": error,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+
+        if success:
+            logger.info(
+                f"Transcription completed: {engine}/{model_id} - {processing_time:.2f}s processing, {duration:.2f}s audio"
+            )
+        else:
+            logger.error(f"Transcription failed: {engine}/{model_id} - {error}")
+
+    def log_model_load_start(self, engine: str, model_id: str, cached: bool):
+        """Log the start of model loading."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "model_load_start",
+            "engine": engine,
+            "model_id": model_id,
+            "was_cached": cached,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.model_usage_log, log_entry)
+        cache_status = "cached" if cached else "downloading"
+        logger.info(f"Loading model: {engine}/{model_id} ({cache_status})")
+
+    def log_model_load_complete(
+        self,
+        engine: str,
+        model_id: str,
+        load_time: float,
+        success: bool,
+        error: str = None,
+    ):
+        """Log the completion of model loading."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "model_load_complete",
+            "engine": engine,
+            "model_id": model_id,
+            "load_time_seconds": load_time,
+            "success": success,
+            "error": error,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.model_usage_log, log_entry)
+
+        if success:
+            logger.info(
+                f"Model loaded successfully: {engine}/{model_id} in {load_time:.2f}s"
+            )
+        else:
+            logger.error(f"Model load failed: {engine}/{model_id} - {error}")
+
+    def log_dependency_error(
+        self, engine: str, model_id: str, dependency: str, error: str
+    ):
+        """Log dependency-related errors."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "dependency_error",
+            "engine": engine,
+            "model_id": model_id,
+            "dependency": dependency,
+            "error": error,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+        logger.error(
+            f"Dependency error for {engine}/{model_id}: {dependency} - {error}"
+        )
+
+    def log_comparison_start(self, models: List[Dict], filename: str, file_size: int):
+        """Log the start of a model comparison."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "comparison_start",
+            "models": models,
+            "filename": filename,
+            "file_size_bytes": file_size,
+            "model_count": len(models),
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+        model_list = ", ".join([f"{m['engine']}/{m['model_id']}" for m in models])
+        logger.info(
+            f"Starting comparison of {len(models)} models: {model_list} for {filename}"
+        )
+
+    def log_comparison_complete(
+        self, models: List[Dict], filename: str, total_time: float, results: Dict
+    ):
+        """Log the completion of a model comparison."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "comparison_complete",
+            "models": models,
+            "filename": filename,
+            "total_time_seconds": total_time,
+            "results_summary": {
+                key: {
+                    "success": result.get("success", False),
+                    "processing_time": result.get("processing_time", 0),
+                }
+                for key, result in results.items()
+            },
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+        successful_models = sum(1 for r in results.values() if r.get("success", False))
+        logger.info(
+            f"Comparison completed: {successful_models}/{len(models)} models successful in {total_time:.2f}s"
+        )
+
+    def _write_log(self, log_file: Path, log_entry: Dict):
+        """Write a log entry to a JSONL file."""
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception as e:
+            logger.error(f"Failed to write to log file {log_file}: {e}")
+
+
+# Initialize transcription logger
+transcription_logger = TranscriptionLogger()
 
 # Model configurations
 MODEL_REGISTRY = {
@@ -129,10 +358,21 @@ def _check_voxtral_support():
         import transformers
 
         version = transformers.__version__
-        return version >= "4.56.0"
-    except ImportError:
+        supported = version >= "4.56.0"
+
+        if not supported:
+            logger.warning(
+                f"Voxtral not supported: transformers version {version} < 4.56.0"
+            )
+        else:
+            logger.info(f"Voxtral supported: transformers version {version}")
+
+        return supported
+    except ImportError as e:
+        logger.warning(f"Voxtral not supported: transformers not installed - {e}")
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking Voxtral support: {e}")
         return False
 
 
@@ -142,10 +382,13 @@ def _check_nemo_support():
         import nemo.collections.asr as nemo_asr
         from nemo.collections.speechlm2.models import SALM
 
+        logger.info("NeMo toolkit detected and supported")
         return True
-    except ImportError:
+    except ImportError as e:
+        logger.warning(f"NeMo not supported: NeMo toolkit not installed - {e}")
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error checking NeMo support: {e}")
         return False
 
 
@@ -192,26 +435,26 @@ class ModelManager:
             cache_dir = self.registry[engine][model_id]["cache_dir"]
             model_file = cache_dir / f"{model_id}.pt"
             is_cached = model_file.exists()
-            
+
             # If cached but not in our cache_info, add it
             if is_cached and cache_key not in self.cache_info:
                 self.mark_model_cached(engine, model_id, cache_dir)
-            
+
             return is_cached
         else:
             # For other engines, check cache_info first, then physical presence
             if cache_key in self.cache_info:
                 cache_dir = Path(self.cache_info[cache_key]["cache_path"])
                 return cache_dir.exists() and any(cache_dir.iterdir())
-            
+
             # Fallback to physical check
             cache_dir = self.registry[engine][model_id]["cache_dir"]
             is_cached = cache_dir.exists() and any(cache_dir.iterdir())
-            
+
             # If cached but not in our cache_info, add it
             if is_cached:
                 self.mark_model_cached(engine, model_id, cache_dir)
-            
+
             return is_cached
 
     def get_model_size(self, engine, model_id):
@@ -246,11 +489,11 @@ class ModelManager:
         for engine, engine_models in self.registry.items():
             for model_id, config in engine_models.items():
                 cache_key = f"{engine}:{model_id}"
-                
+
                 # Skip if already tracked
                 if cache_key in self.cache_info:
                     continue
-                
+
                 # Check if model exists physically
                 if engine == "whisper":
                     cache_dir = config["cache_dir"]
@@ -271,23 +514,32 @@ model_manager.scan_existing_models()
 # Model loading and transcription functions
 def load_model(engine, model_id):
     """Unified model loading for all STT engines."""
+    load_start_time = time.time()
+
     try:
         cache_dir = model_manager.get_cache_dir(engine, model_id)
         is_cached = model_manager.is_model_cached(engine, model_id)
 
+        # Log model load start
+        transcription_logger.log_model_load_start(engine, model_id, is_cached)
+
         if engine == "whisper":
             model = whisper.load_model(
-                model_id, download_root=str(cache_dir.parent), device=DEVICE
+                model_id, download_root=str(cache_dir), device=DEVICE
             )
             result = model
-            
+
             # Ensure Whisper model is marked as cached after loading
             if not is_cached:
                 model_manager.mark_model_cached(engine, model_id, cache_dir)
 
         elif engine == "voxtral":
             if not _check_voxtral_support():
-                raise Exception("Voxtral requires transformers 4.56.0+")
+                error_msg = "Voxtral requires transformers 4.56.0+"
+                transcription_logger.log_dependency_error(
+                    engine, model_id, "transformers", error_msg
+                )
+                raise Exception(error_msg)
 
             from transformers import VoxtralForConditionalGeneration, AutoProcessor
 
@@ -304,7 +556,11 @@ def load_model(engine, model_id):
 
         elif engine == "nvidia":
             if not _check_nemo_support():
-                raise Exception("NeMo toolkit required")
+                error_msg = "NeMo toolkit required"
+                transcription_logger.log_dependency_error(
+                    engine, model_id, "nemo", error_msg
+                )
+                raise Exception(error_msg)
 
             import nemo.collections.asr as nemo_asr
             from nemo.collections.speechlm2.models import SALM
@@ -325,10 +581,20 @@ def load_model(engine, model_id):
         if not is_cached:
             model_manager.mark_model_cached(engine, model_id, cache_dir)
 
+        # Log successful model load
+        load_time = time.time() - load_start_time
+        transcription_logger.log_model_load_complete(engine, model_id, load_time, True)
+
         return result
 
     except Exception as e:
-        raise Exception(f"Error loading {engine} model: {str(e)}")
+        # Log failed model load
+        load_time = time.time() - load_start_time
+        error_msg = str(e)
+        transcription_logger.log_model_load_complete(
+            engine, model_id, load_time, False, error_msg
+        )
+        raise Exception(f"Error loading {engine} model: {error_msg}")
 
 
 def process_audio(audio_path):
@@ -359,9 +625,23 @@ def format_time(seconds):
     return str(datetime.timedelta(seconds=seconds)).split(".")[0]
 
 
-def transcribe_audio(engine, audio_path, model_id):
+def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None):
     """Unified transcription method for all STT engines."""
     start_time = time.time()
+
+    # Extract filename if not provided
+    if filename is None:
+        filename = Path(audio_path).name
+
+    # Get file size if not provided
+    if file_size is None:
+        try:
+            file_size = Path(audio_path).stat().st_size
+        except:
+            file_size = 0
+
+    # Log transcription start
+    transcription_logger.log_transcription_start(engine, model_id, filename, file_size)
 
     try:
         # Load the appropriate model
@@ -443,7 +723,7 @@ def transcribe_audio(engine, audio_path, model_id):
 
             elif engine == "nvidia":
                 model = model_result
-                
+
                 if "parakeet" in model_id:
                     output = model.transcribe([processed_path], timestamps=True)
 
@@ -497,7 +777,7 @@ def transcribe_audio(engine, audio_path, model_id):
                                 result.text.strip(),
                             ]
                         )
-                
+
                 elif "canary" in model_id:
                     prompts = [
                         [
@@ -514,13 +794,17 @@ def transcribe_audio(engine, audio_path, model_id):
                         max_new_tokens=128,
                     )
 
-                    transcription_text = model.tokenizer.ids_to_text(answer_ids[0].cpu())
+                    transcription_text = model.tokenizer.ids_to_text(
+                        answer_ids[0].cpu()
+                    )
 
                     if not transcription_text or transcription_text.strip() == "":
                         raise Exception("Canary-Qwen transcription failed")
 
                     # Simple CSV format (no detailed timestamps from Canary)
-                    csv_data = [["Start (s)", "End (s)", "Duration (s)", "Transcription"]]
+                    csv_data = [
+                        ["Start (s)", "End (s)", "Duration (s)", "Transcription"]
+                    ]
                     csv_data.append(
                         [
                             "0.00",
@@ -534,6 +818,11 @@ def transcribe_audio(engine, audio_path, model_id):
                 raise Exception(f"Unknown engine: {engine}")
 
             processing_time = time.time() - start_time
+
+            # Log successful transcription
+            transcription_logger.log_transcription_complete(
+                engine, model_id, filename, processing_time, duration_sec, True
+            )
 
             return {
                 "success": True,
@@ -551,7 +840,15 @@ def transcribe_audio(engine, audio_path, model_id):
             gc.collect()
 
     except Exception as e:
-        return {"success": False, "error": str(e)}
+        processing_time = time.time() - start_time
+        error_msg = str(e)
+
+        # Log failed transcription
+        transcription_logger.log_transcription_complete(
+            engine, model_id, filename, processing_time, 0, False, error_msg
+        )
+
+        return {"success": False, "error": error_msg}
 
 
 # API Routes
@@ -582,6 +879,44 @@ async def test_endpoint():
         "message": "API is working!",
         "timestamp": datetime.datetime.now().isoformat(),
     }
+
+
+@app.get("/api/logs")
+async def get_logs(log_type: str = "transcriptions", limit: int = 100):
+    """Get recent log entries."""
+    try:
+        if log_type == "transcriptions":
+            log_file = transcription_logger.transcription_log
+        elif log_type == "models":
+            log_file = transcription_logger.model_usage_log
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid log_type. Use 'transcriptions' or 'models'",
+            )
+
+        if not log_file.exists():
+            return {"logs": [], "total": 0}
+
+        logs = []
+        with open(log_file, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        # Get the last 'limit' lines
+        recent_lines = lines[-limit:] if len(lines) > limit else lines
+
+        for line in recent_lines:
+            try:
+                log_entry = json.loads(line.strip())
+                logs.append(log_entry)
+            except json.JSONDecodeError:
+                continue
+
+        return {"logs": logs, "total": len(logs), "log_type": log_type}
+
+    except Exception as e:
+        logger.error(f"Error retrieving logs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/models")
@@ -631,7 +966,9 @@ async def transcribe_endpoint(
             buffer.write(content)
 
         # Transcribe
-        result = transcribe_audio(engine, audio_path, model_id)
+        result = transcribe_audio(
+            engine, audio_path, model_id, file.filename, len(content)
+        )
 
         # Schedule cleanup
         background_tasks.add_task(
@@ -683,6 +1020,12 @@ async def compare_models(
             content = await file.read()
             buffer.write(content)
 
+        # Log comparison start
+        comparison_start_time = time.time()
+        transcription_logger.log_comparison_start(
+            engine_configs, file.filename, len(content)
+        )
+
         # Run comparisons
         results = {}
         for config in engine_configs:
@@ -692,8 +1035,16 @@ async def compare_models(
             if not engine or not model_id:
                 continue
 
-            result = transcribe_audio(engine, audio_path, model_id)
+            result = transcribe_audio(
+                engine, audio_path, model_id, file.filename, len(content)
+            )
             results[f"{engine}_{model_id}"] = result
+
+        # Log comparison completion
+        comparison_time = time.time() - comparison_start_time
+        transcription_logger.log_comparison_complete(
+            engine_configs, file.filename, comparison_time, results
+        )
 
         # Schedule cleanup
         background_tasks.add_task(
@@ -773,5 +1124,16 @@ async def install_dependency(request: DependencyRequest):
 
 if __name__ == "__main__":
     import uvicorn
+
+    # Log startup information
+    logger.info("=" * 50)
+    logger.info("SpeechHub Starting Up")
+    logger.info("=" * 50)
+    logger.info(f"Device: {DEVICE}")
+    logger.info(f"Supported formats: {SUPPORTED_FORMATS}")
+    logger.info(f"Base models directory: {BASE_MODELS_DIR}")
+    logger.info(f"Voxtral support: {_check_voxtral_support()}")
+    logger.info(f"NeMo support: {_check_nemo_support()}")
+    logger.info("=" * 50)
 
     uvicorn.run(app, host="0.0.0.0", port=8000)

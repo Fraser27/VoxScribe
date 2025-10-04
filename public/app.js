@@ -15,6 +15,7 @@ class SpeechHub {
         this.setupTheme();
         await this.loadStatus();
         await this.loadModels();
+        await this.loadRecentLogs();
         this.updateUI();
     }
 
@@ -91,6 +92,11 @@ class SpeechHub {
 
         document.getElementById('installNemo').addEventListener('click', () => {
             this.installDependency('nemo');
+        });
+
+        // Logs viewer
+        document.getElementById('viewLogsBtn').addEventListener('click', () => {
+            this.showLogsModal();
         });
     }
 
@@ -409,6 +415,9 @@ class SpeechHub {
             return;
         }
 
+        // Clear previous results immediately
+        this.clearResults();
+        
         this.showLoading('Transcribing audio...');
 
         try {
@@ -439,8 +448,9 @@ class SpeechHub {
                 }]);
                 this.showToast(`Transcription completed in ${result.processing_time.toFixed(1)}s`, 'success');
                 
-                // Refresh models and cache info to show newly cached models
+                // Refresh models, cache info, and logs
                 await this.loadModels();
+                await this.loadRecentLogs();
             } else {
                 throw new Error(result.error);
             }
@@ -464,6 +474,9 @@ class SpeechHub {
             return;
         }
 
+        // Clear previous results immediately
+        this.clearResults();
+        
         this.showLoading('Comparing models...');
         this.showProgress(0, `Starting comparison of ${this.selectedModels.length} models...`);
 
@@ -496,8 +509,9 @@ class SpeechHub {
                 this.displayResults(results);
                 this.showToast('Model comparison completed', 'success');
                 
-                // Refresh models and cache info to show newly cached models
+                // Refresh models, cache info, and logs
                 await this.loadModels();
+                await this.loadRecentLogs();
             } else {
                 throw new Error('No results received');
             }
@@ -509,6 +523,15 @@ class SpeechHub {
             this.hideLoading();
             this.hideProgress();
         }
+    }
+
+    clearResults() {
+        const resultsSection = document.getElementById('resultsSection');
+        const resultsContent = document.getElementById('resultsContent');
+        
+        // Hide results section and clear content
+        resultsSection.style.display = 'none';
+        resultsContent.innerHTML = '';
     }
 
     displayResults(results) {
@@ -684,6 +707,81 @@ class SpeechHub {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+
+    async loadRecentLogs() {
+        try {
+            const response = await fetch('/api/logs?log_type=transcriptions&limit=5');
+            const data = await response.json();
+            
+            this.displayRecentLogs(data.logs);
+            
+        } catch (error) {
+            console.error('Failed to load recent logs:', error);
+            document.getElementById('recentLogs').innerHTML = '<p class="error-text">Failed to load logs</p>';
+        }
+    }
+
+    displayRecentLogs(logs) {
+        const container = document.getElementById('recentLogs');
+        
+        if (!logs || logs.length === 0) {
+            container.innerHTML = '<p class="info-text">No recent activity</p>';
+            return;
+        }
+
+        container.innerHTML = '';
+        
+        logs.reverse().forEach(log => {
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log-entry';
+            
+            // Determine log type for styling
+            if (log.event === 'transcription_complete' && log.success) {
+                logDiv.classList.add('success');
+            } else if (log.event === 'transcription_complete' && !log.success) {
+                logDiv.classList.add('error');
+            } else {
+                logDiv.classList.add('info');
+            }
+            
+            const timestamp = new Date(log.timestamp).toLocaleTimeString();
+            let message = '';
+            
+            switch (log.event) {
+                case 'transcription_start':
+                    message = `Started: ${log.engine}/${log.model_id}`;
+                    break;
+                case 'transcription_complete':
+                    if (log.success) {
+                        message = `✅ ${log.engine}/${log.model_id} (${log.processing_time_seconds.toFixed(1)}s)`;
+                    } else {
+                        message = `❌ ${log.engine}/${log.model_id} failed`;
+                    }
+                    break;
+                case 'model_load_start':
+                    message = `Loading ${log.engine}/${log.model_id}`;
+                    break;
+                case 'dependency_error':
+                    message = `❌ ${log.dependency} error`;
+                    break;
+                default:
+                    message = log.event;
+            }
+            
+            logDiv.innerHTML = `
+                <div class="log-timestamp">${timestamp}</div>
+                <div class="log-message">${message}</div>
+            `;
+            
+            container.appendChild(logDiv);
+        });
+    }
+
+    showLogsModal() {
+        // For now, just show a simple alert. In a full implementation, 
+        // you'd create a proper modal with detailed logs
+        this.showToast('Full logs viewer coming soon! Check the logs/ directory for detailed logs.', 'info');
     }
 }
 
