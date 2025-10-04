@@ -91,7 +91,7 @@ class SpeechHub {
         });
 
         document.getElementById('installNemo').addEventListener('click', () => {
-            this.installDependency('nemo');
+            this.installDependency('nvidia');
         });
 
         // Logs viewer
