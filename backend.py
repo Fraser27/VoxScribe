@@ -21,7 +21,7 @@ from pydub import AudioSegment
 import numpy as np
 import pandas as pd
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks
+from fastapi import FastAPI, File, UploadFile, HTTPException, BackgroundTasks, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,6 +53,11 @@ MAX_RECOMMENDED_DURATION = 30 * 60
 
 # Base model directory
 BASE_MODELS_DIR = Path(os.getcwd()) / "models"
+
+# Set global cache directories for Hugging Face and NeMo
+os.environ["HF_HOME"] = str(BASE_MODELS_DIR / "huggingface")
+os.environ["HUGGINGFACE_HUB_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "hub")
+os.environ["TRANSFORMERS_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "transformers")
 
 
 # Setup logging
@@ -226,6 +231,45 @@ class TranscriptionLogger:
             f"Dependency error for {engine}/{model_id}: {dependency} - {error}"
         )
 
+    def log_dependency_install_start(self, dependency: str):
+        """Log the start of dependency installation."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "dependency_install_start",
+            "dependency": dependency,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+        logger.info(f"Starting installation of dependency: {dependency}")
+
+    def log_dependency_install_complete(
+        self,
+        dependency: str,
+        success: bool,
+        error: str = None,
+        install_time: float = None,
+    ):
+        """Log the completion of dependency installation."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": "dependency_install_complete",
+            "dependency": dependency,
+            "success": success,
+            "error": error,
+            "install_time_seconds": install_time,
+            "device": DEVICE,
+        }
+
+        self._write_log(self.transcription_log, log_entry)
+
+        if success:
+            logger.info(
+                f"Dependency installation completed: {dependency} in {install_time:.2f}s"
+            )
+        else:
+            logger.error(f"Dependency installation failed: {dependency} - {error}")
+
     def log_comparison_start(self, models: List[Dict], filename: str, file_size: int):
         """Log the start of a model comparison."""
         log_entry = {
@@ -350,11 +394,30 @@ class ModelInfo(BaseModel):
     cached: bool
 
 
-# Dependency checking functions
+def _clear_module_cache_and_refresh(modules_to_clear=None):
+    """Clear module cache and refresh imports after installation."""
+    import importlib
+
+    if modules_to_clear is None:
+        modules_to_clear = ["transformers"]
+
+    # Remove specified modules from cache if they exist
+    modules_to_remove = [
+        name
+        for name in sys.modules.keys()
+        if any(name.startswith(prefix) for prefix in modules_to_clear)
+    ]
+    for module_name in modules_to_remove:
+        del sys.modules[module_name]
+
+    # Invalidate import caches
+    importlib.invalidate_caches()
+    logger.info(f"Cleared module cache for: {', '.join(modules_to_clear)}")
+
+
 def _check_voxtral_support():
     """Internal function to check Voxtral support."""
     try:
-        from transformers import VoxtralForConditionalGeneration, AutoProcessor
         import transformers
 
         version = transformers.__version__
@@ -379,6 +442,19 @@ def _check_voxtral_support():
 def _check_nemo_support():
     """Internal function to check NeMo support."""
     try:
+        # If we've already successfully imported NeMo, don't try again
+        import transformers
+
+        version = transformers.__version__
+        supported = version == "4.51.0"
+
+        if supported:
+            logger.info(f"NeMo toolkit supported: Transformers=={version} loaded")
+        else:
+            logger.error(f"NeMo toolkit not supported: Transformers=={version} loaded")
+            return False
+
+        # Try to import NeMo components
         import nemo.collections.asr as nemo_asr
         from nemo.collections.speechlm2.models import SALM
 
@@ -388,8 +464,15 @@ def _check_nemo_support():
         logger.warning(f"NeMo not supported: NeMo toolkit not installed - {e}")
         return False
     except Exception as e:
-        logger.error(f"Error checking NeMo support: {e}")
-        return False
+        # Handle resolver registration errors specifically
+        if "resolver" in str(e) and "already registered" in str(e):
+            logger.info(
+                "NeMo toolkit supported (resolver already registered from previous import)"
+            )
+            return True
+        else:
+            logger.error(f"Error checking NeMo support: {e}")
+            return False
 
 
 def get_transformers_version():
@@ -436,6 +519,26 @@ class ModelManager:
             model_file = cache_dir / f"{model_id}.pt"
             is_cached = model_file.exists()
 
+            # If cached but not in our cache_info, add it
+            if is_cached and cache_key not in self.cache_info:
+                self.mark_model_cached(engine, model_id, cache_dir)
+
+            return is_cached
+        elif engine == "nvidia":
+            # For NeMo models, check both our cache and huggingface cache
+            cache_dir = self.registry[engine][model_id]["cache_dir"]
+            
+            # Check our designated cache directory
+            is_cached_local = cache_dir.exists() and any(cache_dir.iterdir())
+            
+            # Check huggingface cache structure
+            hf_cache_dir = BASE_MODELS_DIR / "huggingface" / "hub"
+            model_name_safe = model_id.replace("/", "--")
+            hf_model_dir = hf_cache_dir / f"models--{model_name_safe}"
+            is_cached_hf = hf_model_dir.exists() and any(hf_model_dir.rglob("*.nemo"))
+            
+            is_cached = is_cached_local or is_cached_hf
+            
             # If cached but not in our cache_info, add it
             if is_cached and cache_key not in self.cache_info:
                 self.mark_model_cached(engine, model_id, cache_dir)
@@ -535,44 +638,76 @@ def load_model(engine, model_id):
 
         elif engine == "voxtral":
             if not _check_voxtral_support():
-                error_msg = "Voxtral requires transformers 4.56.0+"
+                try:
+
+                    install_deps(engine)
+                except Exception as e:
+                    error_msg = f"Voxtral requires transformers 4.56.0+. {e}"
+                    transcription_logger.log_dependency_error(
+                        engine, model_id, "transformers", error_msg
+                    )
+                    raise Exception(error_msg)
+
+            if _check_voxtral_support():
+                from transformers import VoxtralForConditionalGeneration, AutoProcessor
+
+                processor = AutoProcessor.from_pretrained(
+                    model_id, cache_dir=str(cache_dir)
+                )
+                model = VoxtralForConditionalGeneration.from_pretrained(
+                    model_id,
+                    cache_dir=str(cache_dir),
+                    torch_dtype=torch.bfloat16,
+                    device_map="auto",
+                )
+                result = (model, processor)
+            else:
+                error_msg = f"Voxtral transformers library not loaded successfully."
                 transcription_logger.log_dependency_error(
                     engine, model_id, "transformers", error_msg
                 )
                 raise Exception(error_msg)
 
-            from transformers import VoxtralForConditionalGeneration, AutoProcessor
-
-            processor = AutoProcessor.from_pretrained(
-                model_id, cache_dir=str(cache_dir)
-            )
-            model = VoxtralForConditionalGeneration.from_pretrained(
-                model_id,
-                cache_dir=str(cache_dir),
-                torch_dtype=torch.bfloat16,
-                device_map="auto",
-            )
-            result = (model, processor)
-
         elif engine == "nvidia":
             if not _check_nemo_support():
-                error_msg = "NeMo toolkit required"
+                try:
+                    logger.info("Nemo toolkit needs transformers<4.52.0 and >=4.51.0")
+                    install_deps(engine)
+                except Exception as e:
+                    error_msg = "NeMo toolkit required"
+                    transcription_logger.log_dependency_error(
+                        engine, model_id, "nemo", error_msg
+                    )
+                    raise Exception(error_msg)
+
+            if _check_nemo_support():
+                import nemo.collections.asr as nemo_asr
+                from nemo.collections.speechlm2.models import SALM
+
+                # Set multiple cache environment variables to ensure models are stored in our cache
+                os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
+                os.environ["HF_HOME"] = str(cache_dir / "huggingface")
+                os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir / "huggingface" / "hub")
+                os.environ["TRANSFORMERS_CACHE"] = str(cache_dir / "huggingface" / "transformers")
+                
+                # Ensure the huggingface cache directory exists
+                (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
+                (cache_dir / "huggingface" / "transformers").mkdir(parents=True, exist_ok=True)
+
+                if "parakeet" in model_id:
+                    model = nemo_asr.models.ASRModel.from_pretrained(
+                        model_name=model_id
+                    )
+                elif "canary" in model_id:
+                    model = SALM.from_pretrained(model_id)
+
+                result = model
+            else:
+                error_msg = f"Nemo transformers library not loaded successfully."
                 transcription_logger.log_dependency_error(
-                    engine, model_id, "nemo", error_msg
+                    engine, model_id, "transformers", error_msg
                 )
                 raise Exception(error_msg)
-
-            import nemo.collections.asr as nemo_asr
-            from nemo.collections.speechlm2.models import SALM
-
-            os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
-
-            if "parakeet" in model_id:
-                model = nemo_asr.models.ASRModel.from_pretrained(model_name=model_id)
-            elif "canary" in model_id:
-                model = SALM.from_pretrained(model_id)
-
-            result = model
 
         else:
             raise Exception(f"Unknown engine: {engine}")
@@ -943,8 +1078,8 @@ async def get_models():
 async def transcribe_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    engine: str = "whisper",
-    model_id: str = "base",
+    engine: str = Form(...),
+    model_id: str = Form(...),
 ):
     """Transcribe audio file with specified engine and model."""
 
@@ -988,7 +1123,7 @@ async def transcribe_endpoint(
 async def compare_models(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    engines: str = "[]",  # JSON string of engine configs
+    engines: str = Form(...),  # JSON string of engine configs
 ):
     """Compare multiple models on the same audio file."""
 
@@ -1074,52 +1209,57 @@ async def install_dependency(request: DependencyRequest):
     dependency = request.dependency
     print(f"Installing dependency: {dependency}")  # Debug log
 
-    if dependency == "voxtral":
-        try:
-            command = [sys.executable, "-m", "pip", "install", "transformers==4.56.0"]
-            result = subprocess.run(command, capture_output=True, text=True, check=True)
-            return {
-                "success": True,
-                "message": "Transformers 4.56.0 installed successfully",
-            }
-        except subprocess.CalledProcessError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Installation failed: {e.stderr}"
-            )
+    return install_deps(dependency)
 
-    elif dependency == "nemo":
-        try:
-            # Uninstall transformers first
-            uninstall_cmd = [
-                sys.executable,
-                "-m",
-                "pip",
-                "uninstall",
-                "-y",
-                "transformers",
-            ]
-            subprocess.run(uninstall_cmd, capture_output=True, text=True, check=True)
 
-            # Install NeMo toolkit
-            package_name = (
-                "nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git"
-            )
-            install_cmd = [sys.executable, "-m", "pip", "install", package_name]
-            result = subprocess.run(
-                install_cmd, capture_output=True, text=True, check=True
-            )
-
-            return {"success": True, "message": "NeMo toolkit installed successfully"}
-        except subprocess.CalledProcessError as e:
-            raise HTTPException(
-                status_code=500, detail=f"Installation failed: {e.stderr}"
-            )
-
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown dependency: {dependency}. Supported: 'voxtral', 'nemo'",
+def install_deps(dependency: str):
+    # Validate dependency type first
+    if dependency not in ["voxtral", "nvidia"]:
+        error_msg = f"Unknown dependency: {dependency}. Supported: 'voxtral', 'nvidia'"
+        transcription_logger.log_dependency_install_complete(
+            dependency, False, error_msg
         )
+        raise HTTPException(status_code=400, detail=error_msg)
+
+    # Log installation start
+    transcription_logger.log_dependency_install_start(dependency)
+    install_start_time = time.time()
+
+    try:
+        if dependency == "voxtral":
+            logger.info("Installing transformers 4.56.0")
+            command = [sys.executable, "-m", "pip", "install", "transformers>=4.56.0"]
+            subprocess.run(command, capture_output=True, text=True, check=True)
+
+            # Clear cache and refresh imports
+            _clear_module_cache_and_refresh(["transformers"])
+
+            message = "Transformers 4.56.0 installed successfully"
+
+        elif dependency == "nvidia":
+            logger.info("Installing transformers 4.51.0")
+            command = [sys.executable, "-m", "pip", "install", "transformers==4.51.0"]
+            subprocess.run(command, capture_output=True, text=True, check=True)
+
+            # Clear cache and refresh imports
+            _clear_module_cache_and_refresh(["transformers"])
+
+            message = "Transformers 4.51.0 installed successfully"
+
+        install_time = time.time() - install_start_time
+        transcription_logger.log_dependency_install_complete(
+            dependency, True, None, install_time
+        )
+
+        return {"success": True, "message": message}
+
+    except subprocess.CalledProcessError as e:
+        install_time = time.time() - install_start_time
+        error_msg = f"Installation failed: {e.stderr}"
+        transcription_logger.log_dependency_install_complete(
+            dependency, False, error_msg, install_time
+        )
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 if __name__ == "__main__":
