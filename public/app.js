@@ -310,6 +310,11 @@ class SpeechHub {
             }
         });
 
+        // Remove file button
+        document.getElementById('removeFileBtn').addEventListener('click', () => {
+            this.removeSelectedFile();
+        });
+
         // Model selection
         document.getElementById('engineSelect').addEventListener('change', () => {
             this.updateModelSelect();
@@ -687,6 +692,31 @@ class SpeechHub {
         audioPreview.src = URL.createObjectURL(this.selectedFile);
 
         document.getElementById('fileInfo').style.display = 'block';
+    }
+
+    removeSelectedFile() {
+        // Clear the selected file
+        this.selectedFile = null;
+        
+        // Clear the file input
+        const audioFileInput = document.getElementById('audioFile');
+        audioFileInput.value = '';
+        
+        // Clear the audio preview source
+        const audioPreview = document.getElementById('audioPreview');
+        if (audioPreview.src) {
+            URL.revokeObjectURL(audioPreview.src);
+            audioPreview.src = '';
+        }
+        
+        // Hide the file info section
+        document.getElementById('fileInfo').style.display = 'none';
+        
+        // Update UI to reflect no file selected
+        this.updateUI();
+        
+        // Show a toast notification
+        this.showToast('File removed successfully', 'info');
     }
 
     formatFileSize(bytes) {
