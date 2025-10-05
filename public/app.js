@@ -190,6 +190,78 @@ class SpeechHub {
         // Update UI
         this.updateModelSelects();
         this.updateCompareModels();
+        this.updateDownloadButton();
+    }
+
+    updateDownloadButton() {
+        const engineSelect = document.getElementById('engineSelect');
+        const modelSelect = document.getElementById('modelSelect');
+        const downloadBtn = document.getElementById('downloadModelBtn');
+
+        const selectedEngine = engineSelect.value;
+        const selectedModelId = modelSelect.value;
+
+        if (!selectedEngine || !selectedModelId) {
+            downloadBtn.style.display = 'none';
+            return;
+        }
+
+        const selectedModel = this.availableModels.find(
+            m => m.engine === selectedEngine && m.model_id === selectedModelId
+        );
+
+        if (!selectedModel) {
+            downloadBtn.style.display = 'none';
+            return;
+        }
+
+        // Show download button if model is not cached and not downloading
+        if (!selectedModel.cached && !selectedModel.downloading) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download Model';
+        } else if (selectedModel.downloading) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+        } else {
+            downloadBtn.style.display = 'none';
+        }
+    }
+
+    handleDownloadModelClick() {
+        const engineSelect = document.getElementById('engineSelect');
+        const modelSelect = document.getElementById('modelSelect');
+
+        const selectedEngine = engineSelect.value;
+        const selectedModelId = modelSelect.value;
+
+        if (!selectedEngine || !selectedModelId) {
+            this.showToast('Please select an engine and model first', 'warning');
+            return;
+        }
+
+        const selectedModel = this.availableModels.find(
+            m => m.engine === selectedEngine && m.model_id === selectedModelId
+        );
+
+        if (!selectedModel) {
+            this.showToast('Selected model not found', 'error');
+            return;
+        }
+
+        if (selectedModel.cached) {
+            this.showToast('Model is already cached', 'info');
+            return;
+        }
+
+        if (selectedModel.downloading) {
+            this.showToast('Model is already downloading', 'info');
+            return;
+        }
+
+        // Show download confirmation modal
+        this.showDownloadModal(selectedModel);
     }
 
     setupEventListeners() {
@@ -241,6 +313,16 @@ class SpeechHub {
         // Model selection
         document.getElementById('engineSelect').addEventListener('change', () => {
             this.updateModelSelect();
+        });
+
+        document.getElementById('modelSelect').addEventListener('change', () => {
+            this.updateDownloadButton();
+            this.updateUI();
+        });
+
+        // Download model button
+        document.getElementById('downloadModelBtn').addEventListener('click', () => {
+            this.handleDownloadModelClick();
         });
 
         // Action buttons
@@ -687,6 +769,7 @@ class SpeechHub {
     updateModelSelect(preserveModel = null) {
         const engineSelect = document.getElementById('engineSelect');
         const modelSelect = document.getElementById('modelSelect');
+        const downloadBtn = document.getElementById('downloadModelBtn');
         const selectedEngine = engineSelect.value;
 
         // Use preserved model or current selection
@@ -716,6 +799,8 @@ class SpeechHub {
             }
         }
 
+        // Update download button visibility
+        this.updateDownloadButton();
         this.updateUI();
     }
 
@@ -1262,6 +1347,21 @@ class SpeechHub {
             }
 
             transcribeBtn.disabled = !canTranscribe;
+
+            // Update transcribe button text based on model status
+            const transcribeBtnText = document.getElementById('transcribeBtnText');
+            if (this.selectedFile && engine && modelId) {
+                const selectedModel = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+                if (selectedModel && !selectedModel.cached && !selectedModel.downloading) {
+                    transcribeBtnText.textContent = 'Download Model First';
+                } else if (selectedModel && selectedModel.downloading) {
+                    transcribeBtnText.textContent = 'Downloading...';
+                } else {
+                    transcribeBtnText.textContent = 'Transcribe';
+                }
+            } else {
+                transcribeBtnText.textContent = 'Transcribe';
+            }
 
         } else {
             singleSelect.style.display = 'none';
