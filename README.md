@@ -1,4 +1,4 @@
-# SpeechHub - Compare STT Models
+# VoxScribe - FastAPI Version
 
 A clean separation of frontend and backend for the Universal Speech-to-Text Platform.
 
@@ -74,8 +74,8 @@ A clean separation of frontend and backend for the Universal Speech-to-Text Plat
 
 6. **Create and activate conda environment**
    ```bash
-   conda create -n sttenv python=3.12
-   conda activate sttenv
+   conda create -n voxscribe python=3.12
+   conda activate voxscribe
    ```
 
 7. **Install ffmpeg in Conda env**
@@ -85,8 +85,8 @@ A clean separation of frontend and backend for the Universal Speech-to-Text Plat
 
 8. **Clone the repository**
    ```bash
-   git clone https://github.com/Fraser27/stt-trials.git
-   cd stt-trials
+   git clone https://github.com/Fraser27/VoxScribe.git
+   cd VoxScribe
    ```
 
 9. **Install Python dependencies**
