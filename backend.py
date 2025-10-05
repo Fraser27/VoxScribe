@@ -928,7 +928,7 @@ def _check_nemo_support():
         import transformers
 
         version = transformers.__version__
-        if version == NVIDIA_TRANSFORMERS_VERSION:
+        if version in NVIDIA_TRANSFORMERS_VERSION:
             supported = True
 
         if supported:
@@ -1230,11 +1230,16 @@ def load_model(engine, model_id):
         elif engine == "voxtral":
             if not _check_voxtral_support():
                 try:
-                    # Run dependency installation with WebSocket notifications
                     asyncio.create_task(
-                        install_deps_with_websocket(engine, engine, model_id)
+                        websocket_manager.send_dependency_progress(
+                            dependency,
+                            0,
+                            "preparing",
+                            "Preparing environment for dependency installation...",
+                            engine,
+                            model_id,
+                        )
                     )
-                    # Synchronous fallback for now
                     install_deps(engine)
                 except Exception as e:
                     error_msg = f"Voxtral requires transformers {VOXTRAL_TRANSFORMERS_VERSION}+. {e}"
@@ -1246,8 +1251,28 @@ def load_model(engine, model_id):
             if _check_voxtral_support():
                 from transformers import VoxtralForConditionalGeneration, AutoProcessor
 
+                asyncio.create_task(
+                    websocket_manager.send_dependency_progress(
+                        dependency,
+                        0,
+                        "installing",
+                        f"Installing transformers version {VOXTRAL_TRANSFORMERS_VERSION}...",
+                        engine,
+                        model_id,
+                    )
+                )
                 processor = AutoProcessor.from_pretrained(
                     model_id, cache_dir=str(cache_dir)
+                )
+                asyncio.create_task(
+                    websocket_manager.send_dependency_progress(
+                        dependency,
+                        0,
+                        "loading",
+                        f"Loading Voxtral {model_id}...",
+                        engine,
+                        model_id,
+                    )
                 )
                 model = VoxtralForConditionalGeneration.from_pretrained(
                     model_id,
@@ -1267,11 +1292,16 @@ def load_model(engine, model_id):
             if not _check_nemo_support():
                 try:
                     logger.info("Nemo toolkit needs transformers<4.52.0 and >=4.51.0")
-                    # Run dependency installation with WebSocket notifications
                     asyncio.create_task(
-                        install_deps_with_websocket(engine, engine, model_id)
+                        websocket_manager.send_dependency_progress(
+                            dependency,
+                            0,
+                            "preparing",
+                            "Preparing environment for dependency installation...",
+                            engine,
+                            model_id,
+                        )
                     )
-                    # Synchronous fallback for now
                     install_deps(engine)
                 except Exception as e:
                     error_msg = "NeMo toolkit required"
@@ -1283,6 +1313,17 @@ def load_model(engine, model_id):
             if _check_nemo_support():
                 import nemo.collections.asr as nemo_asr
                 from nemo.collections.speechlm2.models import SALM
+
+                asyncio.create_task(
+                    websocket_manager.send_dependency_progress(
+                        dependency,
+                        0,
+                        "installing",
+                        f"Installing transformers version {NVIDIA_TRANSFORMERS_VERSION}...",
+                        engine,
+                        model_id,
+                    )
+                )
 
                 # Set multiple cache environment variables to ensure models are stored in our cache
                 os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
@@ -1298,6 +1339,17 @@ def load_model(engine, model_id):
                 (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
                 (cache_dir / "huggingface" / "transformers").mkdir(
                     parents=True, exist_ok=True
+                )
+
+                asyncio.create_task(
+                    websocket_manager.send_dependency_progress(
+                        dependency,
+                        0,
+                        "loading",
+                        f"Loading Nvidia {model_id}...",
+                        engine,
+                        model_id,
+                    )
                 )
 
                 if "parakeet" in model_id:
@@ -1575,11 +1627,13 @@ def transcribe_audio(
             # Calculate actual transcription time (excluding model load and audio processing)
             transcription_time = time.time() - transcription_start_time
             total_processing_time = time.time() - total_start_time
-            
+
             # Calculate RTFx (Real-Time Factor)
             # RTFx = audio_duration / processing_time
             # Higher RTFx means faster processing (more audio processed per second of processing time)
-            rtfx = duration_sec / total_processing_time if total_processing_time > 0 else 0
+            rtfx = (
+                duration_sec / total_processing_time if total_processing_time > 0 else 0
+            )
 
             # Log successful transcription
             transcription_logger.log_transcription_complete(
@@ -2006,12 +2060,9 @@ async def install_dependency(request: DependencyRequest):
     print(f"Installing dependency: {dependency}")  # Debug log
 
     try:
-        result = await install_deps_with_websocket(dependency)
-        return result
-    except Exception as e:
-        # Fallback to synchronous installation
-        logger.warning(f"WebSocket installation failed, falling back to sync: {e}")
         return install_deps(dependency)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Installation failed {e}")
 
 
 @app.delete("/api/models/{engine}/{model_id}")
@@ -2139,13 +2190,19 @@ async def install_deps_with_websocket(
                 dependency,
                 20,
                 "installing",
-                "Installing transformers 4.51.0...",
+                f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}...",
                 engine,
                 model_id,
             )
 
-            logger.info("Installing transformers 4.51.0")
-            command = [sys.executable, "-m", "pip", "install", "transformers==4.51.0"]
+            logger.info(f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}")
+            command = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                f"transformers=={NVIDIA_TRANSFORMERS_VERSION}",
+            ]
 
             # Run pip install in executor to avoid blocking
             process = await asyncio.get_event_loop().run_in_executor(
@@ -2167,7 +2224,9 @@ async def install_deps_with_websocket(
             # Clear cache and refresh imports
             _clear_module_cache_and_refresh(["transformers"])
 
-            message = "Transformers 4.51.0 installed successfully"
+            message = (
+                f"Transformers {NVIDIA_TRANSFORMERS_VERSION} installed successfully"
+            )
 
         await websocket_manager.send_dependency_progress(
             dependency, 100, "complete", message, engine, model_id
@@ -2245,6 +2304,7 @@ def install_deps(dependency: str):
                 "install",
                 f"transformers>={VOXTRAL_TRANSFORMERS_VERSION}",
             ]
+
             subprocess.run(command, capture_output=True, text=True, check=True)
 
             # Clear cache and refresh imports
