@@ -1335,12 +1335,14 @@ Modal Styles */
 /* RTFx performance indicators */
 .stat.rtfx[title*="RTFx: 0."],
 .stat.rtfx[title*="RTFx: 0,"] {
-    background-color: #ef4444; /* Red for slow performance */
+    background-color: #ef4444;
+    /* Red for slow performance */
 }
 
 .stat.rtfx[title*="RTFx: 1."],
 .stat.rtfx[title*="RTFx: 1,"] {
-    background-color: #f59e0b; /* Orange for real-time */
+    background-color: #f59e0b;
+    /* Orange for real-time */
 }
 
 .history-rtfx {
