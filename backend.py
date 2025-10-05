@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FastAPI backend for SpeechHub - Universal STT Platform
+FastAPI backend for VoxScribe - Universal STT Platform
 """
 
 import os
@@ -42,7 +42,7 @@ NVIDIA_TRANSFORMERS_VERSION = "4.53.3"
 VOXTRAL_TRANSFORMERS_VERSION = "4.56.0"
 # Initialize FastAPI app
 app = FastAPI(
-    title="SpeechHub API",
+    title="VoxScribe API",
     description="Universal Speech-to-Text Platform API",
     version="1.0.0",
 )
@@ -79,13 +79,13 @@ os.environ["TRANSFORMERS_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "transf
 
 # Setup logging
 def setup_logger():
-    """Setup comprehensive logging for SpeechHub."""
+    """Setup comprehensive logging for VoxScribe."""
     # Create logs directory
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
 
     # Create logger
-    logger = logging.getLogger("speechhub")
+    logger = logging.getLogger("voxscribe")
     logger.setLevel(logging.INFO)
 
     # Remove existing handlers to avoid duplicates
@@ -98,7 +98,7 @@ def setup_logger():
     )
 
     # File handler for all logs
-    file_handler = logging.FileHandler(logs_dir / "speechhub.log")
+    file_handler = logging.FileHandler(logs_dir / "voxscribe.log")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(detailed_formatter)
 
@@ -2502,7 +2502,7 @@ if __name__ == "__main__":
 
     # Log startup information
     logger.info("=" * 50)
-    logger.info("SpeechHub Starting Up")
+    logger.info("VoxScribe Starting Up")
     logger.info("=" * 50)
     logger.info(f"Device: {DEVICE}")
     logger.info(f"Supported formats: {SUPPORTED_FORMATS}")
