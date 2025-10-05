@@ -1230,16 +1230,22 @@ def load_model(engine, model_id):
         elif engine == "voxtral":
             if not _check_voxtral_support():
                 try:
-                    asyncio.create_task(
-                        websocket_manager.send_dependency_progress(
-                            engine,
-                            0,
-                            "preparing",
-                            "Preparing environment for dependency installation...",
-                            engine,
-                            model_id,
-                        )
-                    )
+                    # Fire-and-forget WebSocket notification
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.create_task(
+                                websocket_manager.send_dependency_progress(
+                                    engine,
+                                    0,
+                                    "preparing",
+                                    "Preparing environment for dependency installation...",
+                                    engine,
+                                    model_id,
+                                )
+                            )
+                    except:
+                        pass  # Ignore WebSocket errors in sync context
                     install_deps(engine)
                 except Exception as e:
                     error_msg = f"Voxtral requires transformers {VOXTRAL_TRANSFORMERS_VERSION}+. {e}"
@@ -1251,29 +1257,41 @@ def load_model(engine, model_id):
             if _check_voxtral_support():
                 from transformers import VoxtralForConditionalGeneration, AutoProcessor
 
-                asyncio.create_task(
-                    websocket_manager.send_dependency_progress(
-                        engine,
-                        0,
-                        "installing",
-                        f"Installing transformers version {VOXTRAL_TRANSFORMERS_VERSION}...",
-                        engine,
-                        model_id,
-                    )
-                )
+                # Fire-and-forget WebSocket notification
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            websocket_manager.send_dependency_progress(
+                                engine,
+                                0,
+                                "installing",
+                                f"Installing transformers version {VOXTRAL_TRANSFORMERS_VERSION}...",
+                                engine,
+                                model_id,
+                            )
+                        )
+                except:
+                    pass  # Ignore WebSocket errors in sync context
                 processor = AutoProcessor.from_pretrained(
                     model_id, cache_dir=str(cache_dir)
                 )
-                asyncio.create_task(
-                    websocket_manager.send_dependency_progress(
-                        engine,
-                        0,
-                        "loading",
-                        f"Loading Voxtral {model_id}...",
-                        engine,
-                        model_id,
-                    )
-                )
+                # Fire-and-forget WebSocket notification
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            websocket_manager.send_dependency_progress(
+                                engine,
+                                0,
+                                "loading",
+                                f"Loading Voxtral {model_id}...",
+                                engine,
+                                model_id,
+                            )
+                        )
+                except:
+                    pass  # Ignore WebSocket errors in sync context
                 model = VoxtralForConditionalGeneration.from_pretrained(
                     model_id,
                     cache_dir=str(cache_dir),
@@ -1292,16 +1310,22 @@ def load_model(engine, model_id):
             if not _check_nemo_support():
                 try:
                     logger.info("Nemo toolkit needs transformers<4.52.0 and >=4.51.0")
-                    asyncio.create_task(
-                        websocket_manager.send_dependency_progress(
-                            engine,
-                            0,
-                            "preparing",
-                            "Preparing environment for dependency installation...",
-                            engine,
-                            model_id,
-                        )
-                    )
+                    # Fire-and-forget WebSocket notification
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.create_task(
+                                websocket_manager.send_dependency_progress(
+                                    engine,
+                                    0,
+                                    "preparing",
+                                    "Preparing environment for dependency installation...",
+                                    engine,
+                                    model_id,
+                                )
+                            )
+                    except:
+                        pass  # Ignore WebSocket errors in sync context
                     install_deps(engine)
                 except Exception as e:
                     error_msg = "NeMo toolkit required"
@@ -1314,16 +1338,22 @@ def load_model(engine, model_id):
                 import nemo.collections.asr as nemo_asr
                 from nemo.collections.speechlm2.models import SALM
 
-                asyncio.create_task(
-                    websocket_manager.send_dependency_progress(
-                        engine,
-                        0,
-                        "installing",
-                        f"Installing transformers version {NVIDIA_TRANSFORMERS_VERSION}...",
-                        engine,
-                        model_id,
-                    )
-                )
+                # Fire-and-forget WebSocket notification
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            websocket_manager.send_dependency_progress(
+                                engine,
+                                0,
+                                "installing",
+                                f"Installing transformers version {NVIDIA_TRANSFORMERS_VERSION}...",
+                                engine,
+                                model_id,
+                            )
+                        )
+                except:
+                    pass  # Ignore WebSocket errors in sync context
 
                 # Set multiple cache environment variables to ensure models are stored in our cache
                 os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
@@ -1341,16 +1371,22 @@ def load_model(engine, model_id):
                     parents=True, exist_ok=True
                 )
 
-                asyncio.create_task(
-                    websocket_manager.send_dependency_progress(
-                        engine,
-                        0,
-                        "loading",
-                        f"Loading Nvidia {model_id}...",
-                        engine,
-                        model_id,
-                    )
-                )
+                # Fire-and-forget WebSocket notification
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            websocket_manager.send_dependency_progress(
+                                engine,
+                                0,
+                                "loading",
+                                f"Loading Nvidia {model_id}...",
+                                engine,
+                                model_id,
+                            )
+                        )
+                except:
+                    pass  # Ignore WebSocket errors in sync context
 
                 if "parakeet" in model_id:
                     model = nemo_asr.models.ASRModel.from_pretrained(
