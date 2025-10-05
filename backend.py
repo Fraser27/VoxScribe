@@ -1232,7 +1232,7 @@ def load_model(engine, model_id):
                 try:
                     asyncio.create_task(
                         websocket_manager.send_dependency_progress(
-                            dependency,
+                            engine,
                             0,
                             "preparing",
                             "Preparing environment for dependency installation...",
@@ -1253,7 +1253,7 @@ def load_model(engine, model_id):
 
                 asyncio.create_task(
                     websocket_manager.send_dependency_progress(
-                        dependency,
+                        engine,
                         0,
                         "installing",
                         f"Installing transformers version {VOXTRAL_TRANSFORMERS_VERSION}...",
@@ -1266,7 +1266,7 @@ def load_model(engine, model_id):
                 )
                 asyncio.create_task(
                     websocket_manager.send_dependency_progress(
-                        dependency,
+                        engine,
                         0,
                         "loading",
                         f"Loading Voxtral {model_id}...",
@@ -1294,7 +1294,7 @@ def load_model(engine, model_id):
                     logger.info("Nemo toolkit needs transformers<4.52.0 and >=4.51.0")
                     asyncio.create_task(
                         websocket_manager.send_dependency_progress(
-                            dependency,
+                            engine,
                             0,
                             "preparing",
                             "Preparing environment for dependency installation...",
@@ -1316,7 +1316,7 @@ def load_model(engine, model_id):
 
                 asyncio.create_task(
                     websocket_manager.send_dependency_progress(
-                        dependency,
+                        engine,
                         0,
                         "installing",
                         f"Installing transformers version {NVIDIA_TRANSFORMERS_VERSION}...",
@@ -1343,7 +1343,7 @@ def load_model(engine, model_id):
 
                 asyncio.create_task(
                     websocket_manager.send_dependency_progress(
-                        dependency,
+                        engine,
                         0,
                         "loading",
                         f"Loading Nvidia {model_id}...",
