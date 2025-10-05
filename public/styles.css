@@ -452,6 +452,7 @@ select.form-control option:disabled {
     align-items: center;
     gap: 0.75rem;
     flex: 1;
+    position: relative;
 }
 
 .file-details i {
@@ -476,6 +477,31 @@ select.form-control option:disabled {
 
 .audio-preview {
     max-width: 300px;
+}
+
+.btn-remove-file {
+    background: var(--error-color);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    font-size: 0.875rem;
+    transition: all 0.3s ease;
+    margin-left: auto;
+}
+
+.btn-remove-file:hover {
+    background: #DC2626;
+    transform: scale(1.1);
+}
+
+.btn-remove-file:active {
+    transform: scale(0.95);
 }
 
 /* Buttons */
