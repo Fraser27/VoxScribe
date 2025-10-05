@@ -1286,6 +1286,20 @@ Modal Styles */
     color: var(--text-tertiary);
 }
 
+.history-rtfx {
+    color: var(--text-tertiary);
+    font-size: 0.85em;
+    font-weight: 500;
+}
+
+.stat.rtfx {
+    background-color: var(--accent-color);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+}
+
 .history-actions {
     display: flex;
     gap: 0.5rem;
