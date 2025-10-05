@@ -1,273 +1,207 @@
-# Unified Speech Transcription Suite
+# SpeechHub - Compare STT Models
 
-A comprehensive Streamlit application for speech-to-text transcription using OpenAI's Whisper, Mistral's Voxtral, NVIDIA's Parakeet, and NVIDIA's Canary-Qwen models with local model caching.
+A clean separation of frontend and backend for the Universal Speech-to-Text Platform.
+
+## Architecture
+
+```
+├── backend.py          # FastAPI backend with STT logic
+├── public/             # Frontend static files
+│   ├── index.html      # Main HTML interface
+│   ├── styles.css      # CSS styling with dark/light theme
+│   └── app.js          # JavaScript frontend logic
+├── run.py              # Startup script
+└── requirements.txt    # Python dependencies
+```
 
 ## Features
 
-### Whisper Features
-- **High-quality speech recognition** using OpenAI Whisper
-- **Local model caching** - models are downloaded once and cached locally
-- **Multiple model sizes** - choose between tiny, base, small, medium, and large
-- **Detailed timestamps** - get word-level timestamps
-- **Fast processing** - optimized for efficiency
+### Backend (FastAPI)
+- **RESTful API** for all STT operations
+- **Unified model management** for Whisper, Voxtral, Parakeet, Canary
+- **Automatic dependency handling** with version conflict resolution
+- **File upload and processing** with background tasks
+- **Model comparison** endpoint for side-by-side evaluation
+- **Dependency installation** endpoints with subprocess management
 
-### Voxtral Features  
-- **Advanced audio understanding** using Mistral's Voxtral
-- **Multilingual support** - automatic language detection
-- **Long-form context** - process up to 30 minutes of audio
-- **Audio Q&A** - ask questions about audio content
-- **Function calling** - trigger workflows from voice input
+### Frontend (HTML/CSS/JS)
+- **Modern responsive design** with dark/light theme toggle
+- **Drag & drop file upload** with audio preview
+- **Real-time status updates** for dependencies and models
+- **Single model transcription** with engine/model selection
+- **Multi-model comparison** with checkbox selection
+- **Progress tracking** and result visualization
+- **Download options** for CSV and text formats
 
-### Parakeet Features
-- **NVIDIA optimized** - built for high performance
-- **Fast inference** - optimized for real-time processing
-- **Timestamps support** - detailed timing information
-- **Punctuation & capitalization** - properly formatted output
-- **600M parameters** - balanced size and accuracy
+## Quick Start
 
-### Canary-Qwen Features
-- **State-of-the-art English ASR** - best-in-class accuracy
-- **Ultra-fast processing** - 418 RTFx performance
-- **Dual mode operation** - ASR mode and LLM mode
-- **Punctuation & capitalization** - properly formatted output
-- **2.5B parameters** - optimized for commercial use
+### Prerequisites
+- AWS EC2 g6.xlarge instance with Amazon Linux 2023
+- NVIDIA GPU drivers installed
 
-### Common Features
-- **Multiple audio formats** - supports WAV, MP3, FLAC, M4A, OGG
-- **Export options** - download as CSV, TXT, or SRT subtitle format
-- **macOS compatible** - Whisper models work, others need a GPU
-- **Unified interface** - compare models side-by-side
+### Installation Steps
 
-## Installation
+1. **Install NVIDIA GRID drivers**
+   ```bash
+   # Follow AWS documentation for GRID driver installation
+   # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-GRID-driver
+   ```
 
-1. Create a virtual environment:
+2. **Verify CUDA installation**
+   ```bash
+   nvidia-smi
+   ```
+
+3. **Install system dependencies**
+   ```bash
+   sudo dnf update -y
+   sudo dnf install git -y
+   ```
+
+4. **Install Miniconda**
+   ```bash
+   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+   bash Miniconda3-latest-Linux-x86_64.sh
+   ```
+   - Accept the license agreement (type `yes`)
+   - Confirm installation location (default is fine)
+   - Initialize Conda (type `yes` when prompted)
+
+5. **Restart your shell or source bashrc**
+   ```bash
+   source ~/.bashrc
+   ```
+
+6. **Create and activate conda environment**
+   ```bash
+   conda create -n sttenv python=3.12
+   conda activate sttenv
+   ```
+
+7. **Install ffmpeg in Conda env**
+   ```bash
+   conda install ffmpeg -y
+   ```
+
+8. **Clone the repository**
+   ```bash
+   git clone https://github.com/Fraser27/stt-trials.git
+   cd stt-trials
+   ```
+
+9. **Install Python dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+10. **Start the application**
+   ```bash
+   python run.py
+   ```
+
+11. **Open your browser**
+    ```
+    http://localhost:8000
+    ```
+
+## API Endpoints
+
+### System Status
+- `GET /api/status` - Get system and dependency status
+- `GET /api/models` - Get available models and cache status
+
+### Transcription
+- `POST /api/transcribe` - Single model transcription
+- `POST /api/compare` - Multi-model comparison
+
+### Dependencies
+- `POST /api/install-dependency` - Install missing dependencies
+
+## Model Support
+
+| Engine | Models | Dependencies | Features |
+|--------|--------|--------------|----------|
+| **Whisper** | tiny, base, small, medium, large, large-v2, large-v3 | ✅ Built-in | Detailed timestamps, multiple sizes |
+| **Voxtral** | Mini-3B, Small-24B | transformers 4.56.0+ | Advanced audio understanding, multilingual |
+| **Parakeet** | TDT-0.6B-V2 | NeMo toolkit | NVIDIA optimized, fast inference |
+| **Canary** | Qwen-2.5B | NeMo toolkit | State-of-the-art English ASR |
+
+## Dependency Management
+
+The system automatically handles version conflicts between:
+- **Voxtral**: Requires transformers 4.56.0+
+- **NeMo models**: Require transformers 4.51.3
+
+Installation buttons are provided in the UI for missing dependencies.
+
+## File Support
+
+Supported audio formats: **WAV, MP3, FLAC, M4A, OGG**
+
+## Development
+
+### Backend Development
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # On macOS/Linux
+# Run with auto-reload
+uvicorn backend:app --reload --host 0.0.0.0 --port 8000
 ```
 
-2. Install dependencies:
+### Frontend Development
+Static files are served from the `public/` directory. Changes to HTML, CSS, or JS files are reflected immediately.
 
-**Core dependencies (Whisper + Voxtral):**
+### Adding New Models
+1. Update `MODEL_REGISTRY` in `backend.py`
+2. Add loading logic in `load_model()` function
+3. Add transcription logic in `transcribe_audio()` function
+
+## Benefits over Streamlit
+
+1. **No ScriptRunContext warnings** - Clean separation eliminates context issues
+2. **Better performance** - FastAPI is faster and more efficient
+3. **Modern UI** - Custom HTML/CSS/JS with better UX
+4. **API-first design** - Can be integrated with other applications
+5. **Easier deployment** - Standard web application deployment
+6. **Better error handling** - Proper HTTP status codes and error responses
+7. **Scalability** - Can handle multiple concurrent requests
+
+## Deployment
+
+### Local Development
 ```bash
-pip install -r requirements.txt
+python run.py
 ```
 
-**For Parakeet and Canary-Qwen support (optional):**
+### Production
 ```bash
-# Standard NeMo (for Parakeet)
-pip install nemo_toolkit[asr]
-
-# Latest NeMo trunk (for Canary-Qwen)
-python -m pip install "nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git"
+uvicorn backend:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
-3. Run the application:
-```bash
-streamlit run app_unified.py
+### Docker (Optional)
+```dockerfile
+FROM python:3.9-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+EXPOSE 8000
+CMD ["uvicorn", "backend:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
-
-## Model Caching
-
-Models are automatically cached in the `models/` directory within the project:
-
-- **Whisper models**: Cached in `models/` directory
-- **Voxtral models**: Cached in `models/voxtral/` directory  
-- **Parakeet models**: Cached in `models/parakeet/` directory
-- **Canary-Qwen models**: Cached in `models/canary/` directory
-- **First run**: Downloads and caches the selected model
-- **Subsequent runs**: Loads from local cache (much faster)
-- **Cache management**: Use the sidebar to view cached models and clear cache if needed
-
-### Whisper Model Sizes and Performance
-
-| Model | Parameters | Speed | Accuracy | Size |
-|-------|------------|-------|----------|------|
-| tiny  | 39M        | ~32x  | Good     | ~39MB |
-| base  | 74M        | ~16x  | Better   | ~139MB |
-| small | 244M       | ~6x   | Great    | ~244MB |
-| medium| 769M       | ~2x   | Excellent| ~769MB |
-| large | 1550M      | 1x    | Best     | ~1550MB |
-
-### Voxtral Model Sizes and Performance
-
-| Model | Parameters | Speed | Accuracy | Size | GPU Memory |
-|-------|------------|-------|----------|------|------------|
-| Voxtral Mini 3B | 3B | Fast | Excellent | ~6GB | 8GB+ |
-| Voxtral Small 24B | 24B | Slower | Superior | ~48GB | 24GB+ |
-
-### Parakeet Model Sizes and Performance
-
-| Model | Parameters | Speed | Accuracy | Size | GPU Memory |
-|-------|------------|-------|----------|------|------------|
-| Parakeet TDT 0.6B V2 | 600M | Very Fast | Excellent | ~2.4GB | 2GB+ |
-
-### Canary-Qwen Model Sizes and Performance
-
-| Model | Parameters | Speed | Accuracy | Size | GPU Memory |
-|-------|------------|-------|----------|------|------------|
-| Canary-Qwen 2.5B | 2.5B | Ultra Fast (418 RTFx) | State-of-the-art | ~5GB | 4GB+ |
-
-## Usage
-
-1. **Select Model**: Choose your preferred model size in the sidebar
-2. **Upload Audio**: Drag and drop or select an audio file
-3. **Transcribe**: Click the transcribe button
-4. **Export**: Download results in your preferred format
-
-## Testing
-
-**Test individual models:**
-```bash
-python test_whisper.py    # Test Whisper
-python test_voxtral.py    # Test Voxtral  
-python test_canary.py     # Test Canary-Qwen
-python test_cache.py      # Test cache management
-```
-
-## Pre-downloading Models
-
-**Download models using the unified downloader:**
-```bash
-# Download Whisper models
-python download_models.py --engine whisper --whisper-models tiny base
-
-# Download Voxtral models  
-python download_models.py --engine voxtral --voxtral-models mistralai/Voxtral-Mini-3B-2507
-
-# Download Parakeet models
-python download_models.py --engine parakeet --parakeet-models nvidia/parakeet-tdt-0.6b-v2
-
-# Download Canary-Qwen models
-python download_canary.py
-
-# Download all models
-python download_models.py --engine all
-```
-
-## Project Structure
-
-```
-├── app_unified.py              # Unified Streamlit app (main)
-├── test_whisper.py             # Whisper test script
-├── test_voxtral.py             # Voxtral test script
-├── test_canary.py              # Canary-Qwen test script
-├── test_cache.py               # Cache management test
-├── download_models.py          # Unified model downloader
-├── download_canary.py          # Canary-Qwen model downloader
-├── requirements.txt            # All dependencies
-├── models/                     # Cached Whisper models (auto-created)
-├── models/voxtral/             # Cached Voxtral models (auto-created)
-├── models/parakeet/            # Cached Parakeet models (auto-created)
-├── models/canary/              # Cached Canary-Qwen models (auto-created)
-├── Dataset/                    # Sample audio files
-├── .gitignore                  # Excludes models from version control
-└── README.md                   # This file
-```
-
-## Model Comparison
-
-### When to Use Whisper
-- ✅ Need detailed word-level timestamps
-- ✅ Want fast processing with lower resource requirements
-- ✅ Working with shorter audio files
-- ✅ Need proven accuracy across various accents
-- ✅ Limited GPU memory available
-
-### When to Use Voxtral  
-- ✅ Need advanced audio understanding beyond transcription
-- ✅ Want to ask questions about audio content
-- ✅ Working with long-form audio (up to 30 minutes)
-- ✅ Need multilingual support with automatic detection
-- ✅ Have sufficient GPU resources (8GB+ VRAM)
-
-### When to Use Parakeet
-- ✅ Need NVIDIA-optimized performance
-- ✅ Want fast inference with good accuracy
-- ✅ Working with 16kHz audio files
-- ✅ Need punctuation and capitalization
-- ✅ Have moderate GPU resources (2GB+ VRAM)
-
-### When to Use Canary-Qwen
-- ✅ Need state-of-the-art English ASR accuracy
-- ✅ Want ultra-fast processing (418 RTFx)
-- ✅ Need both ASR and LLM capabilities
-- ✅ Working with English audio content
-- ✅ Have moderate GPU resources (4GB+ VRAM)
-
-## System Requirements
-
-### Whisper
-- **CPU**: Any modern processor
-- **RAM**: 4GB+ recommended
-- **Storage**: 2GB+ for all models
-- **GPU**: Optional (CUDA support available)
-
-### Voxtral
-- **CPU**: Modern multi-core processor
-- **RAM**: 16GB+ recommended
-- **Storage**: 10GB+ for models
-- **GPU**: 8GB+ VRAM for Mini, 24GB+ for Small model
-- **CUDA**: Required for optimal performance
-
-### Parakeet
-- **CPU**: Modern multi-core processor
-- **RAM**: 8GB+ recommended
-- **Storage**: 3GB+ for models
-- **GPU**: 2GB+ VRAM recommended
-- **CUDA**: Required for optimal performance
-
-### Canary-Qwen
-- **CPU**: Modern multi-core processor
-- **RAM**: 8GB+ recommended
-- **Storage**: 6GB+ for models
-- **GPU**: 4GB+ VRAM recommended
-- **CUDA**: Required for optimal performance
 
 ## Troubleshooting
 
-### SSL Certificate Issues
-If you encounter SSL certificate errors on macOS:
-```bash
-/Applications/Python\ 3.13/Install\ Certificates.command
-```
+### Common Issues
 
-### Whisper Issues
-- Check internet connection for first download
-- Clear cache and try again
-- Try a smaller model first (tiny or base)
-- CPU transcription works well for most use cases
+1. **Missing dependencies**: Use the install buttons in the UI
+2. **Model download failures**: Check internet connection and disk space
+3. **Audio processing errors**: Ensure ffmpeg is installed
+4. **CUDA issues**: Check PyTorch CUDA installation
 
-### Voxtral Issues
-- Ensure sufficient GPU memory is available
-- Check CUDA installation for GPU acceleration
-- Try the Mini model first before Small model
-- Monitor system resources during processing
+### Logs
+Server logs are displayed in the terminal where you run `python run.py`.
 
-### Parakeet Issues
-- Install NeMo toolkit: `pip install nemo_toolkit[asr]`
-- Ensure CUDA is properly installed
-- Check that audio is 16kHz for optimal performance
-- Monitor GPU memory usage
+## Contributing
 
-### Canary-Qwen Issues
-- Install latest NeMo: `python -m pip install "nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git"`
-- Ensure PyTorch 2.6+ is installed for FSDP2 support
-- Check that audio is 16kHz mono for optimal performance
-- Monitor GPU memory usage during processing
-
-### Performance Tips
-- **Whisper**: Use smaller models for speed, larger for accuracy
-- **Voxtral**: Ensure adequate GPU memory to avoid OOM errors
-- **Parakeet**: Works best with 16kHz mono audio
-- **Canary-Qwen**: Optimized for 16kHz mono audio, ultra-fast processing
-- **All models**: Process shorter audio clips for faster results
-- **All models**: Close other applications to free up resources
-
-## License : MIT
-
-This project uses:
-- OpenAI's Whisper model - refer to their license terms
-- Mistral's Voxtral model - refer to their license terms  
-- NVIDIA's Parakeet model - refer to their license terms (CC-BY-4.0)
-- NVIDIA's Canary-Qwen model - refer to their license terms (Commercial use ready)
+1. Backend changes: Modify `backend.py`
+2. Frontend changes: Modify files in `public/`
+3. New features: Add API endpoints and corresponding UI elements
+4. Testing: Use the built-in FastAPI docs at `/docs`

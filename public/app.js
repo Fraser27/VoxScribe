@@ -6,6 +6,8 @@ class SpeechHub {
         this.selectedFile = null;
         this.availableModels = [];
         this.selectedModels = [];
+        this.websocket = null;
+        this.pendingDownload = null;
 
         this.init();
     }
@@ -13,10 +15,255 @@ class SpeechHub {
     async init() {
         this.setupEventListeners();
         this.setupTheme();
+        this.setupWebSocket();
         await this.loadStatus();
         await this.loadModels();
         await this.loadRecentLogs();
+        await this.loadTranscriptionHistory();
         this.updateUI();
+    }
+
+    setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+
+        console.log('Attempting to connect to WebSocket:', wsUrl);
+        this.websocket = new WebSocket(wsUrl);
+
+        this.websocket.onopen = () => {
+            console.log('WebSocket connected successfully');
+            this.showToast('Connected to server', 'success');
+        };
+
+        this.websocket.onmessage = (event) => {
+            console.log('Raw WebSocket message received:', event.data);
+            try {
+                const data = JSON.parse(event.data);
+                this.handleWebSocketMessage(data);
+            } catch (error) {
+                console.error('Failed to parse WebSocket message:', error, event.data);
+            }
+        };
+
+        this.websocket.onclose = (event) => {
+            console.log('WebSocket disconnected:', event.code, event.reason);
+            this.showToast('Disconnected from server', 'warning');
+            // Attempt to reconnect after 3 seconds
+            setTimeout(() => this.setupWebSocket(), 3000);
+        };
+
+        this.websocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.showToast('Connection error', 'error');
+        };
+    }
+
+    handleWebSocketMessage(data) {
+        console.log('WebSocket message received:', data);
+        switch (data.type) {
+            case 'download_progress':
+                console.log('Handling download progress:', data);
+                this.updateDownloadProgress(data);
+                break;
+            case 'download_complete':
+                console.log('Handling download complete:', data);
+                this.handleDownloadComplete(data);
+                break;
+            case 'dependency_progress':
+                console.log('Handling dependency progress:', data);
+                this.updateDependencyProgress(data);
+                break;
+            case 'dependency_complete':
+                console.log('Handling dependency complete:', data);
+                this.handleDependencyComplete(data);
+                break;
+            case 'pong':
+                console.log('WebSocket pong received');
+                break;
+            default:
+                console.log('Unknown WebSocket message:', data);
+        }
+    }
+
+    updateDownloadProgress(data) {
+        const { engine, model_id, progress, status, message } = data;
+
+        // Update progress modal
+        document.getElementById('progressModalTitle').textContent = 'Downloading Model. This will take a couple of minutes';
+        document.getElementById('progressModelName').textContent = `${engine}/${model_id}`;
+        document.getElementById('progressStatus').textContent = status;
+        document.getElementById('downloadProgressFill').style.width = `${progress}%`;
+        document.getElementById('downloadProgressText').textContent = message || `${progress}%`;
+
+        // Show progress modal if not already visible
+        if (document.getElementById('downloadProgressModal').style.display !== 'flex') {
+            this.showDownloadProgressModal();
+        }
+
+        // Update model list to show downloading status
+        this.updateModelDownloadStatus(engine, model_id, true, false);
+    }
+
+    updateDependencyProgress(data) {
+        const { dependency, progress, status, message, engine, model_id } = data;
+
+        // Update progress modal with dependency info
+        const modelName = engine && model_id ? `${engine}/${model_id}` : dependency;
+        document.getElementById('progressModalTitle').textContent = 'Installing Dependencies';
+        document.getElementById('progressModelName').textContent = modelName;
+        document.getElementById('progressStatus').textContent = `Installing ${dependency} - ${status}`;
+        document.getElementById('downloadProgressFill').style.width = `${progress}%`;
+        document.getElementById('downloadProgressText').textContent = message || `${progress}%`;
+
+        // Show progress modal if not already visible
+        if (document.getElementById('downloadProgressModal').style.display !== 'flex') {
+            this.showDownloadProgressModal();
+        }
+
+        // Show toast for major dependency progress updates
+        if (status === 'installing') {
+            this.showToast(`Installing ${dependency} dependencies...`, 'info');
+        }
+    }
+
+    async handleDependencyComplete(data) {
+        const { dependency, success, error, engine, model_id } = data;
+
+        if (success) {
+            this.showToast(`${dependency} dependencies installed successfully!`, 'success');
+
+            // Refresh status to update dependency availability
+            await this.loadStatus();
+
+            // If this was part of a model download, the download will continue automatically
+            if (engine && model_id) {
+                this.showToast(`Continuing with ${engine}/${model_id} download...`, 'info');
+            } else {
+                // Hide progress modal after a short delay for standalone dependency install
+                setTimeout(() => {
+                    this.hideDownloadProgressModal();
+                }, 1000);
+            }
+        } else {
+            this.showToast(`Dependency installation failed: ${error}`, 'error');
+            this.hideDownloadProgressModal();
+        }
+    }
+
+    async handleDownloadComplete(data) {
+        const { engine, model_id, success, error } = data;
+
+        if (success) {
+            this.showToast(`Model ${engine}/${model_id} downloaded successfully!`, 'success');
+            this.hideDownloadProgressModal();
+
+            // Refresh models to update cache status
+            await this.loadModels();
+
+            // If this was a pending download for transcription, proceed
+            if (this.pendingDownload &&
+                this.pendingDownload.engine === engine &&
+                this.pendingDownload.model_id === model_id) {
+
+                setTimeout(() => {
+                    this.startTranscription();
+                }, 1000);
+                this.pendingDownload = null;
+            }
+        } else {
+            this.showToast(`Download failed: ${error}`, 'error');
+            this.hideDownloadProgressModal();
+        }
+
+        // Update model status
+        this.updateModelDownloadStatus(engine, model_id, false, success);
+    }
+
+    updateModelDownloadStatus(engine, model_id, downloading, cached) {
+        // Update the model in our local array
+        const model = this.availableModels.find(m => m.engine === engine && m.model_id === model_id);
+        if (model) {
+            model.downloading = downloading;
+            if (cached !== undefined) {
+                model.cached = cached;
+            }
+        }
+
+        // Update UI
+        this.updateModelSelects();
+        this.updateCompareModels();
+        this.updateDownloadButton();
+    }
+
+    updateDownloadButton() {
+        const engineSelect = document.getElementById('engineSelect');
+        const modelSelect = document.getElementById('modelSelect');
+        const downloadBtn = document.getElementById('downloadModelBtn');
+
+        const selectedEngine = engineSelect.value;
+        const selectedModelId = modelSelect.value;
+
+        if (!selectedEngine || !selectedModelId) {
+            downloadBtn.style.display = 'none';
+            return;
+        }
+
+        const selectedModel = this.availableModels.find(
+            m => m.engine === selectedEngine && m.model_id === selectedModelId
+        );
+
+        if (!selectedModel) {
+            downloadBtn.style.display = 'none';
+            return;
+        }
+
+        // Show download button if model is not cached and not downloading
+        if (!selectedModel.cached && !selectedModel.downloading) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download Model';
+        } else if (selectedModel.downloading) {
+            downloadBtn.style.display = 'inline-flex';
+            downloadBtn.disabled = true;
+            downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Downloading...';
+        } else {
+            downloadBtn.style.display = 'none';
+        }
+    }
+
+    handleDownloadModelClick() {
+        const engineSelect = document.getElementById('engineSelect');
+        const modelSelect = document.getElementById('modelSelect');
+
+        const selectedEngine = engineSelect.value;
+        const selectedModelId = modelSelect.value;
+
+        if (!selectedEngine || !selectedModelId) {
+            this.showToast('Please select an engine and model first', 'warning');
+            return;
+        }
+
+        const selectedModel = this.availableModels.find(
+            m => m.engine === selectedEngine && m.model_id === selectedModelId
+        );
+
+        if (!selectedModel) {
+            this.showToast('Selected model not found', 'error');
+            return;
+        }
+
+        if (selectedModel.cached) {
+            this.showToast('Model is already cached', 'info');
+            return;
+        }
+
+        if (selectedModel.downloading) {
+            this.showToast('Model is already downloading', 'info');
+            return;
+        }
+
+        // Show download confirmation modal
+        this.showDownloadModal(selectedModel);
     }
 
     setupEventListeners() {
@@ -65,24 +312,33 @@ class SpeechHub {
             }
         });
 
-        // Engine/Model selection
-        document.getElementById('engineSelect').addEventListener('change', (e) => {
-            this.updateModelOptions(e.target.value);
-            this.updateUI();
+        // Remove file button
+        document.getElementById('removeFileBtn').addEventListener('click', () => {
+            this.removeSelectedFile();
         });
 
         // Model selection
+        document.getElementById('engineSelect').addEventListener('change', () => {
+            this.updateModelSelect();
+        });
+
         document.getElementById('modelSelect').addEventListener('change', () => {
+            this.updateDownloadButton();
             this.updateUI();
+        });
+
+        // Download model button
+        document.getElementById('downloadModelBtn').addEventListener('click', () => {
+            this.handleDownloadModelClick();
         });
 
         // Action buttons
         document.getElementById('transcribeBtn').addEventListener('click', () => {
-            this.transcribe();
+            this.handleTranscribeClick();
         });
 
         document.getElementById('compareBtn').addEventListener('click', () => {
-            this.compareModels();
+            this.handleCompareClick();
         });
 
         // Dependency installation
@@ -94,52 +350,400 @@ class SpeechHub {
             this.installDependency('nvidia');
         });
 
-        // Logs viewer
-        document.getElementById('viewLogsBtn').addEventListener('click', () => {
-            this.showLogsModal();
+        // Transcription history
+        document.getElementById('viewAllHistoryBtn').addEventListener('click', () => {
+            this.showHistoryModal();
+        });
+
+        document.getElementById('refreshHistoryBtn').addEventListener('click', () => {
+            this.loadTranscriptionHistory();
+        });
+
+        // Modal event listeners
+        this.setupModalEventListeners();
+    }
+
+    setupModalEventListeners() {
+        // Download confirmation modal
+        document.getElementById('downloadModalClose').addEventListener('click', () => {
+            this.hideDownloadModal();
+        });
+
+        document.getElementById('cancelDownload').addEventListener('click', () => {
+            this.hideDownloadModal();
+        });
+
+        document.getElementById('confirmDownload').addEventListener('click', () => {
+            this.confirmModelDownload();
+        });
+
+        // Download progress modal
+        document.getElementById('downloadProgressModalClose').addEventListener('click', () => {
+            this.hideDownloadProgressModal();
+        });
+
+        document.getElementById('closeProgressModal').addEventListener('click', () => {
+            this.hideDownloadProgressModal();
+        });
+
+        document.getElementById('cancelDownloadProgress').addEventListener('click', () => {
+            // TODO: Implement download cancellation
+            this.hideDownloadProgressModal();
+        });
+
+        // Delete confirmation modal
+        document.getElementById('deleteModalClose').addEventListener('click', () => {
+            this.hideDeleteConfirmModal();
+        });
+
+        document.getElementById('cancelDelete').addEventListener('click', () => {
+            this.hideDeleteConfirmModal();
+        });
+
+        document.getElementById('confirmDelete').addEventListener('click', () => {
+            this.confirmDeleteModel();
+        });
+
+        // Close modals when clicking outside
+        document.getElementById('downloadModal').addEventListener('click', (e) => {
+            if (e.target.id === 'downloadModal') {
+                this.hideDownloadModal();
+            }
+        });
+
+        document.getElementById('downloadProgressModal').addEventListener('click', (e) => {
+            if (e.target.id === 'downloadProgressModal') {
+                // Allow closing progress modal by clicking outside
+                this.hideDownloadProgressModal();
+            }
+        });
+
+        document.getElementById('deleteConfirmModal').addEventListener('click', (e) => {
+            if (e.target.id === 'deleteConfirmModal') {
+                this.hideDeleteConfirmModal();
+            }
+        });
+
+        // History modal
+        document.getElementById('historyModalClose').addEventListener('click', () => {
+            this.hideHistoryModal();
+        });
+
+        document.getElementById('historyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'historyModal') {
+                this.hideHistoryModal();
+            }
+        });
+
+        // Transcription detail modal
+        document.getElementById('transcriptionDetailClose').addEventListener('click', () => {
+            this.hideTranscriptionDetailModal();
+        });
+
+        document.getElementById('transcriptionDetailModal').addEventListener('click', (e) => {
+            if (e.target.id === 'transcriptionDetailModal') {
+                this.hideTranscriptionDetailModal();
+            }
+        });
+
+        document.getElementById('downloadTranscriptionBtn').addEventListener('click', () => {
+            this.downloadTranscription();
+        });
+
+        document.getElementById('deleteTranscriptionBtn').addEventListener('click', () => {
+            this.deleteTranscriptionFromHistory();
         });
     }
 
-    setupTheme() {
-        const savedTheme = localStorage.getItem('theme') || 'light';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        this.updateThemeIcon(savedTheme);
+    async handleTranscribeClick() {
+        if (!this.selectedFile) {
+            this.showToast('Please select an audio file', 'warning');
+            return;
+        }
+
+        const engine = document.getElementById('engineSelect').value;
+        const modelId = document.getElementById('modelSelect').value;
+
+        if (!engine || !modelId) {
+            this.showToast('Please select an engine and model', 'warning');
+            return;
+        }
+
+        // Check if model is cached
+        const model = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+        if (!model) {
+            this.showToast('Selected model not found', 'error');
+            return;
+        }
+
+        if (!model.cached && !model.downloading) {
+            // Show download confirmation modal
+            this.showDownloadModal(model);
+            return;
+        }
+
+        if (model.downloading) {
+            this.showToast('Model is currently downloading. Please wait.', 'info');
+            return;
+        }
+
+        // Model is cached, proceed with transcription
+        this.startTranscription();
     }
 
-    toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    async startTranscription() {
+        const engine = document.getElementById('engineSelect').value;
+        const modelId = document.getElementById('modelSelect').value;
 
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
-        this.updateThemeIcon(newTheme);
+        this.showProgress('Transcribing audio...');
+
+        const formData = new FormData();
+        formData.append('file', this.selectedFile);
+        formData.append('engine', engine);
+        formData.append('model_id', modelId);
+
+        try {
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Transcription failed');
+            }
+
+            this.hideProgress();
+            this.displayResults(result, 'single');
+            this.showToast('Transcription completed!', 'success');
+
+            // Refresh transcription history
+            await this.loadTranscriptionHistory();
+
+        } catch (error) {
+            this.hideProgress();
+            this.showToast(`Transcription failed: ${error.message}`, 'error');
+            console.error('Transcription error:', error);
+        }
     }
 
-    updateThemeIcon(theme) {
-        const icon = document.querySelector('#themeToggle i');
-        icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    showDownloadModal(model) {
+        document.getElementById('downloadModelName').textContent = model.display_name;
+        document.getElementById('downloadModelSize').textContent = model.size;
+        document.getElementById('downloadModelEngine').textContent = model.engine;
+
+        this.pendingDownload = {
+            engine: model.engine,
+            model_id: model.model_id
+        };
+
+        document.getElementById('downloadModal').style.display = 'flex';
+    }
+
+    hideDownloadModal() {
+        document.getElementById('downloadModal').style.display = 'none';
+        this.pendingDownload = null;
+    }
+
+    showDownloadProgressModal() {
+        document.getElementById('downloadProgressModal').style.display = 'flex';
+    }
+
+    hideDownloadProgressModal() {
+        document.getElementById('downloadProgressModal').style.display = 'none';
+    }
+
+    async confirmModelDownload() {
+        console.log('confirmModelDownload called');
+        if (!this.pendingDownload) {
+            console.log('No pending download');
+            return;
+        }
+
+        // Store the download info before hiding modal (which sets pendingDownload to null)
+        const { engine, model_id } = this.pendingDownload;
+        this.hideDownloadModal();
+        console.log(`Starting download for ${engine}/${model_id}`);
+
+        try {
+            const formData = new FormData();
+            formData.append('engine', engine);
+            formData.append('model_id', model_id);
+
+            console.log('Sending download request to /api/download-model');
+            const response = await fetch('/api/download-model', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            console.log('Download API response:', result);
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Download request failed');
+            }
+
+            if (result.cached) {
+                // Model was already cached
+                console.log('Model was already cached');
+                this.showToast('Model is already cached!', 'info');
+                await this.loadModels();
+                setTimeout(() => this.startTranscription(), 500);
+            } else {
+                // Download started - preserve pending download for when it completes
+                this.pendingDownload = { engine, model_id };
+                console.log('Download started successfully');
+                this.showToast(`Download started for ${engine}/${model_id}. You can continue using the app and check progress anytime.`, 'info');
+                await this.loadModels(); // Refresh to show downloading status
+            }
+
+        } catch (error) {
+            console.error('Download failed:', error);
+            this.showToast(`Download failed: ${error.message}`, 'error');
+        }
+    }
+
+    async handleCompareClick() {
+        if (!this.selectedFile) {
+            this.showToast('Please select an audio file', 'warning');
+            return;
+        }
+
+        const selectedModels = this.getSelectedCompareModels();
+        if (selectedModels.length < 2) {
+            this.showToast('Please select at least 2 models for comparison', 'warning');
+            return;
+        }
+
+        // Check if all models are cached
+        const uncachedModels = selectedModels.filter(model => !model.cached);
+        if (uncachedModels.length > 0) {
+            const modelNames = uncachedModels.map(m => `${m.engine}/${m.model_id}`).join(', ');
+            this.showToast(`The following models need to be downloaded first: ${modelNames}`, 'warning');
+            return;
+        }
+
+        this.showProgress('Comparing models...');
+
+        const formData = new FormData();
+        formData.append('file', this.selectedFile);
+        formData.append('engines', JSON.stringify(selectedModels.map(m => ({
+            engine: m.engine,
+            model_id: m.model_id
+        }))));
+
+        try {
+            const response = await fetch('/api/compare', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Comparison failed');
+            }
+
+            this.hideProgress();
+            this.displayResults(result, 'compare');
+            this.showToast('Comparison completed!', 'success');
+
+            // Refresh transcription history
+            await this.loadTranscriptionHistory();
+
+        } catch (error) {
+            this.hideProgress();
+            this.showToast(`Comparison failed: ${error.message}`, 'error');
+            console.error('Comparison error:', error);
+        }
+    }
+
+    getSelectedCompareModels() {
+        const checkboxes = document.querySelectorAll('#compareModels input[type="checkbox"]:checked');
+        return Array.from(checkboxes).map(checkbox => {
+            const [engine, modelId] = checkbox.value.split(':');
+            return this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+        }).filter(Boolean);
+    }
+
+    handleFileSelect(file) {
+        const supportedFormats = ['wav', 'mp3', 'flac', 'm4a', 'ogg'];
+        const fileExtension = file.name.split('.').pop().toLowerCase();
+
+        if (!supportedFormats.includes(fileExtension)) {
+            this.showToast(`Unsupported file format. Supported: ${supportedFormats.join(', ')}`, 'error');
+            return;
+        }
+
+        this.selectedFile = file;
+        this.updateFileInfo();
+        this.updateUI();
+    }
+
+    updateFileInfo() {
+        if (!this.selectedFile) {
+            document.getElementById('fileInfo').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('fileName').textContent = this.selectedFile.name;
+        document.getElementById('fileSize').textContent = this.formatFileSize(this.selectedFile.size);
+
+        const audioPreview = document.getElementById('audioPreview');
+        audioPreview.src = URL.createObjectURL(this.selectedFile);
+
+        document.getElementById('fileInfo').style.display = 'block';
+    }
+
+    removeSelectedFile() {
+        // Clear the selected file
+        this.selectedFile = null;
+        
+        // Clear the file input
+        const audioFileInput = document.getElementById('audioFile');
+        audioFileInput.value = '';
+        
+        // Clear the audio preview source
+        const audioPreview = document.getElementById('audioPreview');
+        if (audioPreview.src) {
+            URL.revokeObjectURL(audioPreview.src);
+            audioPreview.src = '';
+        }
+        
+        // Hide the file info section
+        document.getElementById('fileInfo').style.display = 'none';
+        
+        // Update UI to reflect no file selected
+        this.updateUI();
+        
+        // Show a toast notification
+        this.showToast('File removed successfully', 'info');
+    }
+
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     async loadStatus() {
         try {
             const response = await fetch('/api/status');
-            const data = await response.json();
+            const status = await response.json();
 
-            document.getElementById('deviceStatus').textContent = data.device.toUpperCase();
+            document.getElementById('deviceStatus').textContent = status.device;
 
             // Update dependency status
-            const deps = data.dependencies;
-            this.updateDependencyStatus('voxtral', deps.voxtral_supported);
-            this.updateDependencyStatus('nemo', deps.nemo_supported);
+            this.updateDependencyStatus('voxtral', status.dependencies.voxtral_supported);
+            this.updateDependencyStatus('nemo', status.dependencies.nemo_supported);
 
-            const dependencyText = [];
-            if (deps.voxtral_supported) dependencyText.push('Voxtral ✅');
-            else dependencyText.push('Voxtral ❌');
-
-            if (deps.nemo_supported) dependencyText.push('NeMo ✅');
-            else dependencyText.push('NeMo ❌');
-
-            document.getElementById('dependencyStatus').textContent = dependencyText.join(', ');
+            const transformersVersion = status.dependencies.transformers_version;
+            const dependencyText = transformersVersion ?
+                `Transformers ${transformersVersion}` : 'Dependencies loading...';
+            document.getElementById('dependencyStatus').textContent = dependencyText;
 
         } catch (error) {
             console.error('Failed to load status:', error);
@@ -147,17 +751,41 @@ class SpeechHub {
         }
     }
 
-    updateDependencyStatus(type, supported) {
-        const statusElement = document.getElementById(`${type}Status`);
-        const installButton = document.getElementById(`install${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    updateDependencyStatus(dependency, supported) {
+        // Map dependency names to element IDs
+        const statusIdMap = {
+            'voxtral': 'voxtralStatus',
+            'nemo': 'nemoStatus'
+        };
+
+        const buttonIdMap = {
+            'voxtral': 'installVoxtral',
+            'nemo': 'installNemo'
+        };
+
+        const statusId = statusIdMap[dependency];
+        const buttonId = buttonIdMap[dependency];
+
+        if (!statusId || !buttonId) {
+            console.error(`Unknown dependency: ${dependency}`);
+            return;
+        }
+
+        const statusElement = document.getElementById(statusId);
+        const installButton = document.getElementById(buttonId);
+
+        if (!statusElement || !installButton) {
+            console.error(`Elements not found for dependency: ${dependency}`);
+            return;
+        }
 
         if (supported) {
-            statusElement.textContent = '✅ Ready';
-            statusElement.className = 'dependency-status status-ready';
+            statusElement.textContent = 'Available';
+            statusElement.className = 'dependency-status status-success';
             installButton.style.display = 'none';
         } else {
-            statusElement.textContent = '❌ Missing';
-            statusElement.className = 'dependency-status status-missing';
+            statusElement.textContent = 'Not Available';
+            statusElement.className = 'dependency-status status-error';
             installButton.style.display = 'inline-block';
         }
     }
@@ -167,111 +795,137 @@ class SpeechHub {
             const response = await fetch('/api/models');
             const data = await response.json();
             this.availableModels = data.models;
-
-            this.populateEngineSelect();
-            this.populateCompareModels();
+            this.updateModelSelects();
+            this.updateCompareModels();
             this.updateCacheInfo();
-
         } catch (error) {
             console.error('Failed to load models:', error);
-            this.showToast('Failed to load model information', 'error');
+            this.showToast('Failed to load models', 'error');
         }
     }
 
-    populateEngineSelect() {
+    updateModelSelects() {
         const engineSelect = document.getElementById('engineSelect');
+        const modelSelect = document.getElementById('modelSelect');
+
+        // Preserve current selections
+        const currentEngine = engineSelect.value;
+        const currentModel = modelSelect.value;
+
+        // Get unique engines
         const engines = [...new Set(this.availableModels.map(m => m.engine))];
 
         engineSelect.innerHTML = '<option value="">Select Engine...</option>';
         engines.forEach(engine => {
             const option = document.createElement('option');
             option.value = engine;
-            
-            // Special handling for engine display names
-            let displayName;
-            if (engine === 'nvidia') {
-                displayName = 'NVIDIA';
-            } else {
-                displayName = engine.charAt(0).toUpperCase() + engine.slice(1);
-            }
-            
-            option.textContent = displayName;
+            option.textContent = engine.charAt(0).toUpperCase() + engine.slice(1);
             engineSelect.appendChild(option);
         });
+
+        // Restore engine selection if it still exists
+        if (currentEngine && engines.includes(currentEngine)) {
+            engineSelect.value = currentEngine;
+        }
+
+        this.updateModelSelect(currentModel);
     }
 
-    updateModelOptions(engine) {
+    updateModelSelect(preserveModel = null) {
+        const engineSelect = document.getElementById('engineSelect');
         const modelSelect = document.getElementById('modelSelect');
+        const downloadBtn = document.getElementById('downloadModelBtn');
+        const selectedEngine = engineSelect.value;
+
+        // Use preserved model or current selection
+        const currentModel = preserveModel || modelSelect.value;
+
         modelSelect.innerHTML = '<option value="">Select Model...</option>';
 
-        if (!engine) return;
+        if (selectedEngine) {
+            const engineModels = this.availableModels.filter(m => m.engine === selectedEngine);
+            engineModels.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.model_id;
 
-        const engineModels = this.availableModels.filter(m => m.engine === engine);
-        engineModels.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.model_id;
-            option.textContent = `${model.display_name} (${model.size}) ${model.cached ? '✅' : '⬇️'}`;
-            modelSelect.appendChild(option);
-        });
-    }
+                let displayText = model.display_name;
+                if (!model.cached) {
+                    displayText += model.downloading ? ' (Downloading...)' : ' (Not Downloaded)';
+                }
 
-    populateCompareModels() {
-        const container = document.getElementById('compareModels');
-        container.innerHTML = '';
-
-        const groupedModels = {};
-        this.availableModels.forEach(model => {
-            if (!groupedModels[model.engine]) {
-                groupedModels[model.engine] = [];
-            }
-            groupedModels[model.engine].push(model);
-        });
-
-        Object.entries(groupedModels).forEach(([engine, models]) => {
-            const engineSection = document.createElement('div');
-            engineSection.className = 'engine-section';
-
-            const engineTitle = document.createElement('h5');
-            
-            // Special handling for engine display names
-            let displayName;
-            if (engine === 'nvidia') {
-                displayName = 'NVIDIA';
-            } else {
-                displayName = engine.charAt(0).toUpperCase() + engine.slice(1);
-            }
-            
-            engineTitle.textContent = displayName;
-            engineTitle.style.marginBottom = '0.5rem';
-            engineTitle.style.color = 'var(--primary-color)';
-            engineSection.appendChild(engineTitle);
-
-            models.forEach(model => {
-                const checkbox = document.createElement('label');
-                checkbox.className = 'model-checkbox';
-
-                const input = document.createElement('input');
-                input.type = 'checkbox';
-                input.value = `${model.engine}:${model.model_id}`;
-                input.addEventListener('change', () => this.updateSelectedModels());
-
-                const text = document.createElement('span');
-                text.textContent = `${model.display_name} (${model.size}) ${model.cached ? '✅' : '⬇️'}`;
-
-                checkbox.appendChild(input);
-                checkbox.appendChild(text);
-                engineSection.appendChild(checkbox);
+                option.textContent = displayText;
+                option.disabled = model.downloading;
+                modelSelect.appendChild(option);
             });
 
-            container.appendChild(engineSection);
-        });
+            // Restore model selection if it still exists and is available
+            if (currentModel && engineModels.some(m => m.model_id === currentModel)) {
+                modelSelect.value = currentModel;
+            }
+        }
+
+        // Update download button visibility
+        this.updateDownloadButton();
+        this.updateUI();
     }
 
-    updateSelectedModels() {
-        const checkboxes = document.querySelectorAll('#compareModels input[type="checkbox"]:checked');
-        this.selectedModels = Array.from(checkboxes).map(cb => {
-            const [engine, model_id] = cb.value.split(':');
-            return { engine, model_id };
+    updateCompareModels() {
+        const compareModelsContainer = document.getElementById('compareModels');
+        compareModelsContainer.innerHTML = '';
+
+        // Sort models: cached first, then downloading, then not downloaded
+        const sortedModels = [...this.availableModels].sort((a, b) => {
+            // Priority: cached (0) > downloading (1) > not cached (2)
+            const getPriority = (model) => {
+                if (model.cached && !model.downloading) return 0;
+                if (model.downloading) return 1;
+                return 2;
+            };
+
+            const priorityA = getPriority(a);
+            const priorityB = getPriority(b);
+
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+
+            // Within same priority, sort by display name
+            return a.display_name.localeCompare(b.display_name);
+        });
+
+        sortedModels.forEach(model => {
+            const modelCard = document.createElement('div');
+            modelCard.className = 'model-card-compare';
+
+            let statusClass = 'status-cached';
+            let statusText = 'Cached';
+            let disabled = false;
+
+            if (model.downloading) {
+                statusClass = 'status-downloading';
+                statusText = 'Downloading...';
+                disabled = true;
+            } else if (!model.cached) {
+                statusClass = 'status-not-cached';
+                statusText = 'Not Downloaded';
+                disabled = true;
+            }
+
+            modelCard.innerHTML = `
+                <label class="model-checkbox-label ${disabled ? 'disabled' : ''}">
+                    <input type="checkbox" value="${model.engine}:${model.model_id}" ${disabled ? 'disabled' : ''}>
+                    <div class="model-info">
+                        <div class="model-name">${model.display_name}</div>
+                        <div class="model-details">
+                            <span class="model-engine">${model.engine}</span>
+                            <span class="model-size">${model.size}</span>
+                        </div>
+                        <div class="model-status ${statusClass}">${statusText}</div>
+                    </div>
+                </label>
+            `;
+
+            compareModelsContainer.appendChild(modelCard);
         });
 
         this.updateUI();
@@ -279,80 +933,486 @@ class SpeechHub {
 
     updateCacheInfo() {
         const cachedModels = this.availableModels.filter(m => m.cached);
-        const cacheStatus = document.getElementById('cacheStatus');
+        const totalModels = this.availableModels.length;
+
+        document.getElementById('cacheStatus').textContent =
+            `${cachedModels.length} of ${totalModels} models cached`;
+
         const cachedModelsContainer = document.getElementById('cachedModels');
+        cachedModelsContainer.innerHTML = '';
 
         if (cachedModels.length === 0) {
-            cacheStatus.textContent = 'No models cached yet';
-            cachedModelsContainer.innerHTML = '';
-        } else {
-            cacheStatus.textContent = `${cachedModels.length} model(s) cached`;
-
-            const groupedCached = {};
-            cachedModels.forEach(model => {
-                if (!groupedCached[model.engine]) {
-                    groupedCached[model.engine] = [];
-                }
-                groupedCached[model.engine].push(model);
-            });
-
-            cachedModelsContainer.innerHTML = '';
-            Object.entries(groupedCached).forEach(([engine, models]) => {
-                const engineDiv = document.createElement('div');
-                
-                // Special handling for engine display names
-                let displayName;
-                if (engine === 'nvidia') {
-                    displayName = 'NVIDIA';
-                } else {
-                    displayName = engine.charAt(0).toUpperCase() + engine.slice(1);
-                }
-                
-                engineDiv.innerHTML = `<strong>${displayName}:</strong>`;
-                models.forEach(model => {
-                    const modelDiv = document.createElement('div');
-                    modelDiv.style.fontSize = '0.875rem';
-                    modelDiv.style.color = 'var(--text-secondary)';
-                    modelDiv.style.marginLeft = '1rem';
-                    modelDiv.textContent = `• ${model.display_name} (${model.size})`;
-                    engineDiv.appendChild(modelDiv);
-                });
-                cachedModelsContainer.appendChild(engineDiv);
-            });
-        }
-    }
-
-    handleFileSelect(file) {
-        const supportedFormats = ['wav', 'mp3', 'flac', 'm4a', 'ogg'];
-        const fileExtension = file.name.split('.').pop().toLowerCase();
-
-        if (!supportedFormats.includes(fileExtension)) {
-            this.showToast(`Unsupported file format. Supported: ${supportedFormats.join(', ').toUpperCase()}`, 'error');
+            cachedModelsContainer.innerHTML = '<p class="info-text">No models cached yet</p>';
             return;
         }
 
-        this.selectedFile = file;
-
-        // Update file info display
-        document.getElementById('fileName').textContent = file.name;
-        document.getElementById('fileSize').textContent = this.formatFileSize(file.size);
-
-        // Create audio preview
-        const audioPreview = document.getElementById('audioPreview');
-        audioPreview.src = URL.createObjectURL(file);
-
-        // Show file info
-        document.getElementById('fileInfo').style.display = 'flex';
-
-        this.updateUI();
+        cachedModels.forEach(model => {
+            const modelItem = document.createElement('div');
+            modelItem.className = 'cached-model-item';
+            modelItem.innerHTML = `
+                <div class="cached-model-info">
+                    <div class="cached-model-name">${model.display_name}</div>
+                    <div class="cached-model-details">${model.engine} • ${model.size}</div>
+                </div>
+                <button class="delete-model-btn" onclick="speechHub.deleteModel('${model.engine}', '${model.model_id}')" title="Delete cached model">
+                    <i class="fas fa-trash"></i>
+                </button>
+            `;
+            cachedModelsContainer.appendChild(modelItem);
+        });
     }
 
-    formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    async loadRecentLogs() {
+        try {
+            const response = await fetch('/api/logs?log_type=transcriptions&limit=5');
+            const data = await response.json();
+
+            const recentLogsContainer = document.getElementById('recentLogs');
+
+            if (data.logs.length === 0) {
+                recentLogsContainer.innerHTML = '<p class="info-text">No recent activity</p>';
+                return;
+            }
+
+            recentLogsContainer.innerHTML = '';
+            data.logs.reverse().forEach(log => {
+                const logItem = document.createElement('div');
+                logItem.className = 'log-item';
+
+                const timestamp = new Date(log.timestamp).toLocaleTimeString();
+                const event = log.event.replace('_', ' ');
+
+                logItem.innerHTML = `
+                    <div class="log-time">${timestamp}</div>
+                    <div class="log-event">${event}</div>
+                `;
+
+                recentLogsContainer.appendChild(logItem);
+            });
+
+        } catch (error) {
+            console.error('Failed to load recent logs:', error);
+        }
+    }
+
+    async installDependency(dependency) {
+        // Map dependency names to button IDs
+        const buttonIdMap = {
+            'voxtral': 'installVoxtral',
+            'nvidia': 'installNemo'
+        };
+
+        const buttonId = buttonIdMap[dependency];
+        if (!buttonId) {
+            console.error(`Unknown dependency: ${dependency}`);
+            return;
+        }
+
+        const button = document.getElementById(buttonId);
+        if (!button) {
+            console.error(`Button not found: ${buttonId}`);
+            return;
+        }
+
+        const originalText = button.innerHTML;
+
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
+        button.disabled = true;
+
+        try {
+            // Show progress modal immediately
+            document.getElementById('progressModalTitle').textContent = 'Installing Dependencies';
+            document.getElementById('progressModelName').textContent = dependency;
+            document.getElementById('progressStatus').textContent = 'Preparing installation...';
+            document.getElementById('downloadProgressFill').style.width = '0%';
+            document.getElementById('downloadProgressText').textContent = 'Starting...';
+            this.showDownloadProgressModal();
+
+            const response = await fetch('/api/install-dependency', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ dependency })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                // Success message will be handled by WebSocket
+                // Just reload status to update dependency info
+                await this.loadStatus();
+            } else {
+                this.hideDownloadProgressModal();
+                throw new Error(result.detail || 'Installation failed');
+            }
+
+        } catch (error) {
+            this.hideDownloadProgressModal();
+            this.showToast(`Installation failed: ${error.message}`, 'error');
+        } finally {
+            button.innerHTML = originalText;
+            button.disabled = false;
+        }
+    }
+
+    async loadTranscriptionHistory() {
+        try {
+            const response = await fetch('/api/transcriptions?limit=5');
+            const data = await response.json();
+
+            const historyContainer = document.getElementById('transcriptionHistoryList');
+
+            if (data.transcriptions.length === 0) {
+                historyContainer.innerHTML = '<p class="info-text">No transcriptions yet</p>';
+                return;
+            }
+
+            historyContainer.innerHTML = '';
+            data.transcriptions.forEach(transcription => {
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.onclick = () => this.showTranscriptionDetail(transcription.id);
+
+                const statusClass = transcription.success ? 'success' : 'error';
+                const statusText = transcription.success ? 'Success' : 'Failed';
+                const date = new Date(transcription.timestamp).toLocaleDateString();
+                const duration = transcription.transcription_duration_seconds
+                    ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
+                    : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
+
+                historyItem.innerHTML = `
+                    <div class="history-item-header">
+                        <div class="history-filename" title="${transcription.audio_filename}">
+                            ${transcription.audio_filename}
+                        </div>
+                        <div class="history-status ${statusClass}">${statusText}</div>
+                    </div>
+                    <div class="history-item-details">
+                        <div class="history-model">${transcription.model_display_name}</div>
+                        <div class="history-duration">${duration}</div>
+                        <div class="history-rtfx" title="Real-Time Factor">RTFx: ${rtfx}</div>
+                    </div>
+                `;
+
+                historyContainer.appendChild(historyItem);
+            });
+
+        } catch (error) {
+            console.error('Failed to load transcription history:', error);
+            document.getElementById('transcriptionHistoryList').innerHTML =
+                '<p class="info-text">Failed to load history</p>';
+        }
+    }
+
+    showHistoryModal() {
+        this.loadFullTranscriptionHistory();
+        document.getElementById('historyModal').style.display = 'flex';
+    }
+
+    hideHistoryModal() {
+        document.getElementById('historyModal').style.display = 'none';
+    }
+
+    async loadFullTranscriptionHistory() {
+        try {
+            const response = await fetch('/api/transcriptions?limit=50');
+            const data = await response.json();
+
+            const historyContent = document.getElementById('historyContent');
+
+            if (data.transcriptions.length === 0) {
+                historyContent.innerHTML = '<p class="info-text">No transcriptions found</p>';
+                return;
+            }
+
+            let tableHTML = `
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Audio File</th>
+                            <th>Model</th>
+                            <th>Duration</th>
+                            <th>RTFx</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.transcriptions.forEach(transcription => {
+                const date = new Date(transcription.timestamp).toLocaleString();
+                const statusClass = transcription.success ? 'success' : 'error';
+                const statusText = transcription.success ? 'Success' : 'Failed';
+                const duration = transcription.transcription_duration_seconds
+                    ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
+                    : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
+
+                tableHTML += `
+                    <tr>
+                        <td>${date}</td>
+                        <td title="${transcription.audio_filename}">${transcription.audio_filename}</td>
+                        <td>${transcription.model_display_name}</td>
+                        <td>${duration}</td>
+                        <td title="Real-Time Factor">${rtfx}</td>
+                        <td><span class="history-status ${statusClass}">${statusText}</span></td>
+                        <td>
+                            <div class="history-table-actions">
+                                <button class="btn-view" onclick="speechHub.showTranscriptionDetail('${transcription.id}')">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                                <button class="btn-delete-small" onclick="speechHub.deleteTranscriptionFromHistory('${transcription.id}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tableHTML += '</tbody></table>';
+            historyContent.innerHTML = tableHTML;
+
+        } catch (error) {
+            console.error('Failed to load full transcription history:', error);
+            document.getElementById('historyContent').innerHTML =
+                '<p class="info-text">Failed to load history</p>';
+        }
+    }
+
+    async showTranscriptionDetail(transcriptionId) {
+        try {
+            this.hideHistoryModal();
+            this.showProgress('Loading transcription details...');
+
+            const response = await fetch(`/api/transcriptions/${transcriptionId}`);
+            const transcription = await response.json();
+
+            if (!response.ok) {
+                throw new Error(transcription.detail || 'Failed to load transcription');
+            }
+
+            this.hideProgress();
+            this.currentTranscriptionId = transcriptionId;
+
+            // Update modal title
+            document.getElementById('transcriptionDetailTitle').textContent =
+                `Transcription: ${transcription.audio_filename}`;
+
+            // Build metadata section
+            const date = new Date(transcription.timestamp).toLocaleString();
+            const duration = transcription.transcription_duration_seconds
+                ? `${transcription.transcription_duration_seconds.toFixed(2)} seconds`
+                : 'N/A';
+            const audioDuration = transcription.audio_duration_seconds
+                ? `${transcription.audio_duration_seconds.toFixed(2)} seconds`
+                : 'N/A';
+            const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
+
+            let metaHTML = `
+                <div class="transcription-meta">
+                    <div class="meta-item">
+                        <div class="meta-label">Date</div>
+                        <div class="meta-value">${date}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Audio File</div>
+                        <div class="meta-value">${transcription.audio_filename}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Model</div>
+                        <div class="meta-value">${transcription.model_display_name}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Audio Duration</div>
+                        <div class="meta-value">${audioDuration}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Transcription Time</div>
+                        <div class="meta-value">${duration}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">RTFx (Real-Time Factor)</div>
+                        <div class="meta-value" title="Real-Time Factor: ${rtfx} means ${rtfx.replace('x', '')} seconds of audio processed per second of processing time">${rtfx}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Status</div>
+                        <div class="meta-value">
+                            <span class="history-status ${transcription.success ? 'success' : 'error'}">
+                                ${transcription.success ? 'Success' : 'Failed'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Add results section
+            if (transcription.success && transcription.csv_data) {
+                metaHTML += `
+                    <div class="transcription-results">
+                        <h4>Transcription Results</h4>
+                        ${this.generateCSVTable(transcription.csv_data)}
+                    </div>
+                `;
+            } else if (!transcription.success && transcription.error) {
+                metaHTML += `
+                    <div class="transcription-results">
+                        <h4>Error Details</h4>
+                        <div class="result-error">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <p>${transcription.error}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('transcriptionDetailContent').innerHTML = metaHTML;
+            document.getElementById('transcriptionDetailModal').style.display = 'flex';
+
+        } catch (error) {
+            this.hideProgress();
+            this.showToast(`Failed to load transcription details: ${error.message}`, 'error');
+        }
+    }
+
+    hideTranscriptionDetailModal() {
+        document.getElementById('transcriptionDetailModal').style.display = 'none';
+        this.currentTranscriptionId = null;
+    }
+
+    async downloadTranscription() {
+        if (!this.currentTranscriptionId) {
+            this.showToast('No transcription selected', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/transcriptions/${this.currentTranscriptionId}/download`);
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Download failed');
+            }
+
+            // Create download link
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = response.headers.get('Content-Disposition')?.split('filename=')[1] || 'transcription.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            this.showToast('Transcription downloaded successfully', 'success');
+
+        } catch (error) {
+            this.showToast(`Download failed: ${error.message}`, 'error');
+        }
+    }
+
+    async deleteTranscriptionFromHistory(transcriptionId = null) {
+        const idToDelete = transcriptionId || this.currentTranscriptionId;
+
+        if (!idToDelete) {
+            this.showToast('No transcription selected', 'error');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this transcription from history?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/transcriptions/${idToDelete}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to delete transcription');
+            }
+
+            this.showToast('Transcription deleted from history', 'success');
+
+            // Refresh history
+            await this.loadTranscriptionHistory();
+
+            // If we're in the detail modal, close it
+            if (idToDelete === this.currentTranscriptionId) {
+                this.hideTranscriptionDetailModal();
+            }
+
+            // If we're in the full history modal, refresh it
+            if (document.getElementById('historyModal').style.display === 'flex') {
+                await this.loadFullTranscriptionHistory();
+            }
+
+        } catch (error) {
+            this.showToast(`Failed to delete transcription: ${error.message}`, 'error');
+        }
+    }
+
+    showDeleteConfirmModal(engine, modelId) {
+        // Find the model for display name
+        const model = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+        const displayName = model ? model.display_name : `${engine}/${modelId}`;
+
+        document.getElementById('deleteModelName').textContent = displayName;
+
+        // Store the model info for deletion
+        this.pendingDelete = { engine, modelId };
+
+        document.getElementById('deleteConfirmModal').style.display = 'flex';
+    }
+
+    hideDeleteConfirmModal() {
+        document.getElementById('deleteConfirmModal').style.display = 'none';
+        this.pendingDelete = null;
+    }
+
+    async deleteModel(engine, modelId) {
+        this.showDeleteConfirmModal(engine, modelId);
+    }
+
+    async confirmDeleteModel() {
+        if (!this.pendingDelete) {
+            return;
+        }
+
+        const { engine, modelId } = this.pendingDelete;
+        this.hideDeleteConfirmModal();
+
+        try {
+            this.showProgress('Deleting model cache...');
+
+            const response = await fetch(`/api/models/${encodeURIComponent(engine)}/${encodeURIComponent(modelId)}`, {
+                method: 'DELETE'
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.detail || 'Failed to delete model');
+            }
+
+            this.hideProgress();
+            this.showToast(result.message, 'success');
+
+            // Refresh models to update the UI
+            await this.loadModels();
+
+        } catch (error) {
+            this.hideProgress();
+            this.showToast(`Failed to delete model: ${error.message}`, 'error');
+            console.error('Delete model error:', error);
+        }
     }
 
     updateUI() {
@@ -368,24 +1428,32 @@ class SpeechHub {
             transcribeBtn.style.display = 'inline-flex';
             compareBtn.style.display = 'none';
 
-            // Update transcribe button
+            // Enable transcribe button if file and model selected and model is cached
             const engine = document.getElementById('engineSelect').value;
-            const model = document.getElementById('modelSelect').value;
-            const canTranscribe = this.selectedFile && engine && model;
+            const modelId = document.getElementById('modelSelect').value;
+
+            let canTranscribe = false;
+            if (this.selectedFile && engine && modelId) {
+                const selectedModel = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+                canTranscribe = selectedModel && selectedModel.cached && !selectedModel.downloading;
+            }
 
             transcribeBtn.disabled = !canTranscribe;
-            
-            let engineDisplayName = 'Engine';
-            if (engine) {
-                if (engine === 'nvidia') {
-                    engineDisplayName = 'NVIDIA';
+
+            // Update transcribe button text based on model status
+            const transcribeBtnText = document.getElementById('transcribeBtnText');
+            if (this.selectedFile && engine && modelId) {
+                const selectedModel = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+                if (selectedModel && !selectedModel.cached && !selectedModel.downloading) {
+                    transcribeBtnText.textContent = 'Download Model First';
+                } else if (selectedModel && selectedModel.downloading) {
+                    transcribeBtnText.textContent = 'Downloading...';
                 } else {
-                    engineDisplayName = engine.charAt(0).toUpperCase() + engine.slice(1);
+                    transcribeBtnText.textContent = 'Transcribe';
                 }
+            } else {
+                transcribeBtnText.textContent = 'Transcribe';
             }
-            
-            document.getElementById('transcribeBtnText').textContent =
-                canTranscribe ? `Transcribe with ${engineDisplayName}` : 'Transcribe';
 
         } else {
             singleSelect.style.display = 'none';
@@ -393,292 +1461,149 @@ class SpeechHub {
             transcribeBtn.style.display = 'none';
             compareBtn.style.display = 'inline-flex';
 
-            // Update compare button
-            const canCompare = this.selectedFile && this.selectedModels.length >= 2;
-            compareBtn.disabled = !canCompare;
-            document.getElementById('compareBtnText').textContent =
-                canCompare ? `Compare ${this.selectedModels.length} Models` : 'Compare Models';
+            // Enable compare button if file and at least 2 cached models selected
+            const selectedModels = this.getSelectedCompareModels();
+            const cachedSelectedModels = selectedModels.filter(m => m.cached && !m.downloading);
+            compareBtn.disabled = !(this.selectedFile && cachedSelectedModels.length >= 2);
         }
     }
 
-    async transcribe() {
-        if (!this.selectedFile) {
-            this.showToast('Please select an audio file', 'error');
-            return;
-        }
-
-        const engine = document.getElementById('engineSelect').value;
-        const model_id = document.getElementById('modelSelect').value;
-
-        if (!engine || !model_id) {
-            this.showToast('Please select engine and model', 'error');
-            return;
-        }
-
-        // Clear previous results immediately
-        this.clearResults();
-        
-        this.showLoading('Transcribing audio...');
-
-        try {
-            const formData = new FormData();
-            formData.append('file', this.selectedFile);
-            formData.append('engine', engine);
-            formData.append('model_id', model_id);
-
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Update engine display name
-                let engineDisplayName;
-                if (engine === 'nvidia') {
-                    engineDisplayName = 'NVIDIA';
-                } else {
-                    engineDisplayName = engine.charAt(0).toUpperCase() + engine.slice(1);
-                }
-                
-                this.displayResults([{
-                    name: `${engineDisplayName} - ${model_id}`,
-                    data: result
-                }]);
-                this.showToast(`Transcription completed in ${result.processing_time.toFixed(1)}s`, 'success');
-                
-                // Refresh models, cache info, and logs
-                await this.loadModels();
-                await this.loadRecentLogs();
-            } else {
-                throw new Error(result.error);
-            }
-
-        } catch (error) {
-            console.error('Transcription failed:', error);
-            this.showToast(`Transcription failed: ${error.message}`, 'error');
-        } finally {
-            this.hideLoading();
-        }
-    }
-
-    async compareModels() {
-        if (!this.selectedFile) {
-            this.showToast('Please select an audio file', 'error');
-            return;
-        }
-
-        if (this.selectedModels.length < 2) {
-            this.showToast('Please select at least 2 models for comparison', 'error');
-            return;
-        }
-
-        // Clear previous results immediately
-        this.clearResults();
-        
-        this.showLoading('Comparing models...');
-        this.showProgress(0, `Starting comparison of ${this.selectedModels.length} models...`);
-
-        try {
-            const formData = new FormData();
-            formData.append('file', this.selectedFile);
-            formData.append('engines', JSON.stringify(this.selectedModels));
-
-            const response = await fetch('/api/compare', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (data.results) {
-                const results = Object.entries(data.results).map(([key, result]) => {
-                    let displayName = key.replace('_', ' - ');
-                    // Update engine names in the display
-                    displayName = displayName.replace(/^nvidia/, 'NVIDIA');
-                    displayName = displayName.replace(/^whisper/, 'Whisper');
-                    displayName = displayName.replace(/^voxtral/, 'Voxtral');
-                    
-                    return {
-                        name: displayName,
-                        data: result
-                    };
-                });
-
-                this.displayResults(results);
-                this.showToast('Model comparison completed', 'success');
-                
-                // Refresh models, cache info, and logs
-                await this.loadModels();
-                await this.loadRecentLogs();
-            } else {
-                throw new Error('No results received');
-            }
-
-        } catch (error) {
-            console.error('Comparison failed:', error);
-            this.showToast(`Comparison failed: ${error.message}`, 'error');
-        } finally {
-            this.hideLoading();
-            this.hideProgress();
-        }
-    }
-
-    clearResults() {
-        const resultsSection = document.getElementById('resultsSection');
-        const resultsContent = document.getElementById('resultsContent');
-        
-        // Hide results section and clear content
-        resultsSection.style.display = 'none';
-        resultsContent.innerHTML = '';
-    }
-
-    displayResults(results) {
+    displayResults(result, mode) {
         const resultsSection = document.getElementById('resultsSection');
         const resultsContent = document.getElementById('resultsContent');
 
         resultsContent.innerHTML = '';
 
-        results.forEach(result => {
-            if (!result.data.success) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'result-item';
-                errorDiv.innerHTML = `
-                    <div class="result-header">
-                        <span class="result-title">${result.name}</span>
-                        <span class="result-meta error-text">Failed</span>
-                    </div>
-                    <p class="error-text">${result.data.error}</p>
-                `;
-                resultsContent.appendChild(errorDiv);
-                return;
-            }
-
-            const resultDiv = document.createElement('div');
-            resultDiv.className = 'result-item';
-
-            const csvData = result.data.csv_data;
-            const processingTime = result.data.processing_time;
-            const duration = result.data.duration;
-
-            // Create table
-            const table = document.createElement('table');
-            table.className = 'result-table';
-
-            // Header
-            const thead = document.createElement('thead');
-            const headerRow = document.createElement('tr');
-            csvData[0].forEach(header => {
-                const th = document.createElement('th');
-                th.textContent = header;
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            // Body
-            const tbody = document.createElement('tbody');
-            csvData.slice(1).forEach(row => {
-                const tr = document.createElement('tr');
-                row.forEach(cell => {
-                    const td = document.createElement('td');
-                    td.textContent = cell;
-                    tr.appendChild(td);
-                });
-                tbody.appendChild(tr);
-            });
-            table.appendChild(tbody);
-
-            // Create download buttons
-            const csvContent = this.arrayToCSV(csvData);
-            const textContent = csvData.slice(1).map(row => row[row.length - 1]).join('\n\n');
-
-            resultDiv.innerHTML = `
-                <div class="result-header">
-                    <span class="result-title">${result.name}</span>
-                    <span class="result-meta">
-                        ${processingTime.toFixed(1)}s processing time | ${duration.toFixed(1)}s audio
-                    </span>
-                </div>
-            `;
-
-            resultDiv.appendChild(table);
-
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'result-actions';
-
-            const csvBtn = document.createElement('button');
-            csvBtn.className = 'btn btn-small btn-primary';
-            csvBtn.innerHTML = '<i class="fas fa-download"></i> Download CSV';
-            csvBtn.onclick = () => this.downloadContent(csvContent, `${this.selectedFile.name}_${result.name.replace(/[^a-zA-Z0-9]/g, '_')}.csv`, 'text/csv');
-
-            const txtBtn = document.createElement('button');
-            txtBtn.className = 'btn btn-small btn-secondary';
-            txtBtn.innerHTML = '<i class="fas fa-download"></i> Download Text';
-            txtBtn.onclick = () => this.downloadContent(textContent, `${this.selectedFile.name}_${result.name.replace(/[^a-zA-Z0-9]/g, '_')}.txt`, 'text/plain');
-
-            actionsDiv.appendChild(csvBtn);
-            actionsDiv.appendChild(txtBtn);
-
-            resultDiv.appendChild(actionsDiv);
-            resultsContent.appendChild(resultDiv);
-        });
+        if (mode === 'single') {
+            this.displaySingleResult(result, resultsContent);
+        } else {
+            this.displayComparisonResults(result, resultsContent);
+        }
 
         resultsSection.style.display = 'block';
+        resultsSection.scrollIntoView({ behavior: 'smooth' });
     }
 
-    arrayToCSV(data) {
-        return data.map(row =>
-            row.map(cell =>
-                typeof cell === 'string' && cell.includes(',') ? `"${cell}"` : cell
-            ).join(',')
-        ).join('\n');
+    displaySingleResult(result, container) {
+        if (!result.success) {
+            container.innerHTML = `
+                <div class="result-error">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Transcription failed: ${result.error}</p>
+                </div>
+            `;
+            return;
+        }
+
+        const resultCard = document.createElement('div');
+        resultCard.className = 'result-card';
+
+        const processingTime = result.processing_time.toFixed(2);
+        const duration = result.duration.toFixed(2);
+        const rtfx = result.rtfx ? (result.rtfx >= 100 ? result.rtfx.toFixed(0) : result.rtfx.toFixed(1)) : 'N/A';
+
+        resultCard.innerHTML = `
+            <div class="result-header">
+                <h4><i class="fas fa-file-audio"></i> Transcription Result</h4>
+                <div class="result-stats">
+                    <span class="stat">Processing: ${processingTime}s</span>
+                    <span class="stat">Duration: ${duration}s</span>
+                    <span class="stat rtfx" title="Real-Time Factor: ${rtfx}x means ${rtfx} seconds of audio processed per second of processing time">RTFx: ${rtfx}x</span>
+                </div>
+            </div>
+            <div class="result-content">
+                ${this.generateCSVTable(result.csv_data)}
+            </div>
+        `;
+
+        container.appendChild(resultCard);
     }
 
-    async installDependency(type) {
-        this.showLoading(`Installing ${type} dependency...`);
+    displayComparisonResults(result, container) {
+        const results = result.results;
 
-        try {
-            const response = await fetch('/api/install-dependency', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ dependency: type })
-            });
+        Object.entries(results).forEach(([modelKey, modelResult]) => {
+            const resultCard = document.createElement('div');
+            resultCard.className = 'result-card';
 
-            const result = await response.json();
+            const [engine, modelId] = modelKey.split('_');
+            const model = this.availableModels.find(m => m.engine === engine && m.model_id === modelId);
+            const displayName = model ? model.display_name : modelKey;
 
-            if (result.success) {
-                this.showToast(result.message, 'success');
-                // Reload status after installation
-                setTimeout(() => this.loadStatus(), 2000);
+            if (!modelResult.success) {
+                resultCard.innerHTML = `
+                    <div class="result-header">
+                        <h4><i class="fas fa-exclamation-triangle"></i> ${displayName}</h4>
+                        <div class="result-status error">Failed</div>
+                    </div>
+                    <div class="result-content">
+                        <p class="error-message">${modelResult.error}</p>
+                    </div>
+                `;
             } else {
-                throw new Error(result.detail || 'Installation failed');
+                const processingTime = modelResult.processing_time.toFixed(2);
+                const duration = modelResult.duration.toFixed(2);
+                const rtfx = modelResult.rtfx ? (modelResult.rtfx >= 100 ? modelResult.rtfx.toFixed(0) : modelResult.rtfx.toFixed(1)) : 'N/A';
+
+                resultCard.innerHTML = `
+                    <div class="result-header">
+                        <h4><i class="fas fa-check-circle"></i> ${displayName}</h4>
+                        <div class="result-stats">
+                            <span class="stat">Processing: ${processingTime}s</span>
+                            <span class="stat">Duration: ${duration}s</span>
+                            <span class="stat rtfx" title="Real-Time Factor: ${rtfx}x means ${rtfx} seconds of audio processed per second of processing time">RTFx: ${rtfx}x</span>
+                        </div>
+                    </div>
+                    <div class="result-content">
+                        ${this.generateCSVTable(modelResult.csv_data)}
+                    </div>
+                `;
             }
 
-        } catch (error) {
-            console.error('Installation failed:', error);
-            this.showToast(`Installation failed: ${error.message}`, 'error');
-        } finally {
-            this.hideLoading();
+            container.appendChild(resultCard);
+        });
+    }
+
+    generateCSVTable(csvData) {
+        if (!csvData || csvData.length === 0) {
+            return '<p class="info-text">No transcription data available</p>';
         }
+
+        const headers = csvData[0];
+        const rows = csvData.slice(1);
+
+        let tableHTML = '<div class="csv-table-container"><table class="csv-table">';
+
+        // Headers
+        tableHTML += '<thead><tr>';
+        headers.forEach(header => {
+            tableHTML += `<th>${header}</th>`;
+        });
+        tableHTML += '</tr></thead>';
+
+        // Rows
+        tableHTML += '<tbody>';
+        rows.forEach(row => {
+            tableHTML += '<tr>';
+            row.forEach(cell => {
+                tableHTML += `<td>${cell}</td>`;
+            });
+            tableHTML += '</tr>';
+        });
+        tableHTML += '</tbody></table></div>';
+
+        return tableHTML;
     }
 
-    showLoading(text = 'Loading...') {
-        document.getElementById('loadingText').textContent = text;
-        document.getElementById('loadingOverlay').style.display = 'flex';
-    }
-
-    hideLoading() {
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
-
-    showProgress(percent, text) {
-        document.getElementById('progressFill').style.width = `${percent}%`;
-        document.getElementById('progressText').textContent = text;
+    showProgress(message) {
+        document.getElementById('progressText').textContent = message;
         document.getElementById('progressSection').style.display = 'block';
+        document.getElementById('progressFill').style.width = '0%';
+
+        // Animate progress bar
+        setTimeout(() => {
+            document.getElementById('progressFill').style.width = '100%';
+        }, 100);
     }
 
     hideProgress() {
@@ -688,104 +1613,56 @@ class SpeechHub {
     showToast(message, type = 'info') {
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
 
-        document.getElementById('toastContainer').appendChild(toast);
+        const icon = {
+            success: 'fas fa-check-circle',
+            error: 'fas fa-exclamation-circle',
+            warning: 'fas fa-exclamation-triangle',
+            info: 'fas fa-info-circle'
+        }[type] || 'fas fa-info-circle';
 
+        toast.innerHTML = `
+            <i class="${icon}"></i>
+            <span>${message}</span>
+        `;
+
+        const container = document.getElementById('toastContainer');
+        container.appendChild(toast);
+
+        // Auto remove after 5 seconds
         setTimeout(() => {
             toast.remove();
         }, 5000);
-    }
 
-    downloadContent(content, filename, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
-    async loadRecentLogs() {
-        try {
-            const response = await fetch('/api/logs?log_type=transcriptions&limit=5');
-            const data = await response.json();
-            
-            this.displayRecentLogs(data.logs);
-            
-        } catch (error) {
-            console.error('Failed to load recent logs:', error);
-            document.getElementById('recentLogs').innerHTML = '<p class="error-text">Failed to load logs</p>';
-        }
-    }
-
-    displayRecentLogs(logs) {
-        const container = document.getElementById('recentLogs');
-        
-        if (!logs || logs.length === 0) {
-            container.innerHTML = '<p class="info-text">No recent activity</p>';
-            return;
-        }
-
-        container.innerHTML = '';
-        
-        logs.reverse().forEach(log => {
-            const logDiv = document.createElement('div');
-            logDiv.className = 'log-entry';
-            
-            // Determine log type for styling
-            if (log.event === 'transcription_complete' && log.success) {
-                logDiv.classList.add('success');
-            } else if (log.event === 'transcription_complete' && !log.success) {
-                logDiv.classList.add('error');
-            } else {
-                logDiv.classList.add('info');
-            }
-            
-            const timestamp = new Date(log.timestamp).toLocaleTimeString();
-            let message = '';
-            
-            switch (log.event) {
-                case 'transcription_start':
-                    message = `Started: ${log.engine}/${log.model_id}`;
-                    break;
-                case 'transcription_complete':
-                    if (log.success) {
-                        message = `✅ ${log.engine}/${log.model_id} (${log.processing_time_seconds.toFixed(1)}s)`;
-                    } else {
-                        message = `❌ ${log.engine}/${log.model_id} failed`;
-                    }
-                    break;
-                case 'model_load_start':
-                    message = `Loading ${log.engine}/${log.model_id}`;
-                    break;
-                case 'dependency_error':
-                    message = `❌ ${log.dependency} error`;
-                    break;
-                default:
-                    message = log.event;
-            }
-            
-            logDiv.innerHTML = `
-                <div class="log-timestamp">${timestamp}</div>
-                <div class="log-message">${message}</div>
-            `;
-            
-            container.appendChild(logDiv);
+        // Remove on click
+        toast.addEventListener('click', () => {
+            toast.remove();
         });
     }
 
-    showLogsModal() {
-        // For now, just show a simple alert. In a full implementation, 
-        // you'd create a proper modal with detailed logs
-        this.showToast('Full logs viewer coming soon! Check the logs/ directory for detailed logs.', 'info');
+    setupTheme() {
+        const savedTheme = localStorage.getItem('speechhub-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        this.updateThemeIcon(savedTheme);
+    }
+
+    toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+        document.documentElement.setAttribute('data-theme', newTheme);
+        localStorage.setItem('speechhub-theme', newTheme);
+        this.updateThemeIcon(newTheme);
+    }
+
+    updateThemeIcon(theme) {
+        const icon = document.querySelector('#themeToggle i');
+        icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
     }
 }
 
 // Initialize the application
+let speechHub;
 document.addEventListener('DOMContentLoaded', () => {
-    new SpeechHub();
+    speechHub = new SpeechHub();
 });
