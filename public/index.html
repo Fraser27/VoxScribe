@@ -165,6 +165,33 @@
                 </div>
             </div>
 
+            <div class="sidebar-section" id="downloadsSection" style="display: none;">
+                <h4><i class="fas fa-download"></i> Active Downloads</h4>
+                <div id="activeDownloads" class="active-downloads">
+                    <!-- Active downloads will be listed here -->
+                </div>
+                <button id="viewDownloadsBtn" class="btn btn-small btn-secondary" style="width: 100%; margin-top: 0.5rem;">
+                    <i class="fas fa-eye"></i> View Progress
+                </button>
+            </div>
+
+            <div class="sidebar-section">
+                <h4><i class="fas fa-file-alt"></i> Transcription History</h4>
+                <div class="transcription-history">
+                    <div id="transcriptionHistoryList" class="history-list">
+                        <p class="info-text">Loading history...</p>
+                    </div>
+                    <div class="history-actions">
+                        <button id="viewAllHistoryBtn" class="btn btn-secondary btn-small">
+                            <i class="fas fa-list"></i> View All
+                        </button>
+                        <button id="refreshHistoryBtn" class="btn btn-secondary btn-small">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="sidebar-section">
                 <h4><i class="fas fa-history"></i> Recent Activity</h4>
                 <div id="recentLogs" class="recent-logs">
@@ -202,7 +229,7 @@
                             <li>✅ NVIDIA optimized models</li>
                             <li>✅ Fast inference</li>
                             <li>✅ Parakeet: Timestamps support</li>
-                            <li>✅ Canary Qwen: State-of-the-art English ASR</li>
+                            <li>✅ Canary: State-of-the-art English ASR</li>
                             <li>🔧 Requires NeMo toolkit</li>
                         </ul>
                     </div>
@@ -216,6 +243,129 @@
         <div class="loading-content">
             <div class="spinner"></div>
             <p id="loadingText">Processing...</p>
+        </div>
+    </div>
+
+    <!-- Download Confirmation Modal -->
+    <div id="downloadModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> Download Model</h3>
+                <button class="modal-close" id="downloadModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>The selected model is not cached and needs to be downloaded.</p>
+                <div class="model-download-info">
+                    <div class="download-detail">
+                        <strong>Model:</strong> <span id="downloadModelName"></span>
+                    </div>
+                    <div class="download-detail">
+                        <strong>Size:</strong> <span id="downloadModelSize"></span>
+                    </div>
+                    <div class="download-detail">
+                        <strong>Engine:</strong> <span id="downloadModelEngine"></span>
+                    </div>
+                </div>
+                <p class="download-warning">
+                    <i class="fas fa-info-circle"></i>
+                    This may take several minutes depending on your internet connection.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelDownload" class="btn btn-secondary">Cancel</button>
+                <button id="confirmDownload" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Download Progress Modal -->
+    <div id="downloadProgressModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-download"></i> <span id="progressModalTitle">Downloading Model</span></h3>
+            </div>
+            <div class="modal-body">
+                <div class="download-progress-info">
+                    <div class="download-detail">
+                        <strong>Model:</strong> <span id="progressModelName"></span>
+                    </div>
+                    <div class="download-detail">
+                        <strong>Status:</strong> <span id="progressStatus"></span>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div id="downloadProgressFill" class="progress-fill"></div>
+                </div>
+                <p id="downloadProgressText" class="progress-text">Initializing...</p>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelDownloadProgress" class="btn btn-secondary" disabled>
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-trash"></i> Delete Model</h3>
+                <button class="modal-close" id="deleteModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the cached model <strong id="deleteModelName"></strong>?</p>
+                <div class="delete-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>This will free up disk space but you'll need to download the model again to use it.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelDelete" class="btn btn-secondary">Cancel</button>
+                <button id="confirmDelete" class="btn" style="background-color: #ef4444; color: white;">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcription History Modal -->
+    <div id="historyModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-alt"></i> Transcription History</h3>
+                <button class="modal-close" id="historyModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="historyContent" class="history-content">
+                    <!-- History content will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcription Detail Modal -->
+    <div id="transcriptionDetailModal" class="modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-alt"></i> <span id="transcriptionDetailTitle">Transcription Details</span></h3>
+                <button class="modal-close" id="transcriptionDetailClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="transcriptionDetailContent" class="transcription-detail-content">
+                    <!-- Transcription details will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="downloadTranscriptionBtn" class="btn btn-primary">
+                    <i class="fas fa-download"></i> Download CSV
+                </button>
+                <button id="deleteTranscriptionBtn" class="btn" style="background-color: #ef4444; color: white;">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
         </div>
     </div>
 
