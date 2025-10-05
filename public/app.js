@@ -371,6 +371,14 @@ class SpeechHub {
         });
 
         // Download progress modal
+        document.getElementById('downloadProgressModalClose').addEventListener('click', () => {
+            this.hideDownloadProgressModal();
+        });
+
+        document.getElementById('closeProgressModal').addEventListener('click', () => {
+            this.hideDownloadProgressModal();
+        });
+
         document.getElementById('cancelDownloadProgress').addEventListener('click', () => {
             // TODO: Implement download cancellation
             this.hideDownloadProgressModal();
@@ -398,7 +406,8 @@ class SpeechHub {
 
         document.getElementById('downloadProgressModal').addEventListener('click', (e) => {
             if (e.target.id === 'downloadProgressModal') {
-                // Don't allow closing progress modal by clicking outside
+                // Allow closing progress modal by clicking outside
+                this.hideDownloadProgressModal();
             }
         });
 
@@ -711,8 +720,32 @@ class SpeechHub {
     }
 
     updateDependencyStatus(dependency, supported) {
-        const statusElement = document.getElementById(`${dependency}Status`);
-        const installButton = document.getElementById(`install${dependency.charAt(0).toUpperCase() + dependency.slice(1)}`);
+        // Map dependency names to element IDs
+        const statusIdMap = {
+            'voxtral': 'voxtralStatus',
+            'nemo': 'nemoStatus'
+        };
+
+        const buttonIdMap = {
+            'voxtral': 'installVoxtral',
+            'nemo': 'installNemo'
+        };
+
+        const statusId = statusIdMap[dependency];
+        const buttonId = buttonIdMap[dependency];
+
+        if (!statusId || !buttonId) {
+            console.error(`Unknown dependency: ${dependency}`);
+            return;
+        }
+
+        const statusElement = document.getElementById(statusId);
+        const installButton = document.getElementById(buttonId);
+
+        if (!statusElement || !installButton) {
+            console.error(`Elements not found for dependency: ${dependency}`);
+            return;
+        }
 
         if (supported) {
             statusElement.textContent = 'Available';
@@ -931,7 +964,24 @@ class SpeechHub {
     }
 
     async installDependency(dependency) {
-        const button = document.getElementById(`install${dependency.charAt(0).toUpperCase() + dependency.slice(1)}`);
+        // Map dependency names to button IDs
+        const buttonIdMap = {
+            'voxtral': 'installVoxtral',
+            'nvidia': 'installNemo'
+        };
+
+        const buttonId = buttonIdMap[dependency];
+        if (!buttonId) {
+            console.error(`Unknown dependency: ${dependency}`);
+            return;
+        }
+
+        const button = document.getElementById(buttonId);
+        if (!button) {
+            console.error(`Button not found: ${buttonId}`);
+            return;
+        }
+
         const originalText = button.innerHTML;
 
         button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
@@ -998,7 +1048,7 @@ class SpeechHub {
                 const duration = transcription.transcription_duration_seconds
                     ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
                     : 'N/A';
-                const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
 
                 historyItem.innerHTML = `
                     <div class="history-item-header">
@@ -1068,7 +1118,7 @@ class SpeechHub {
                 const duration = transcription.transcription_duration_seconds
                     ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
                     : 'N/A';
-                const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
 
                 tableHTML += `
                     <tr>
@@ -1129,7 +1179,7 @@ class SpeechHub {
             const audioDuration = transcription.audio_duration_seconds
                 ? `${transcription.audio_duration_seconds.toFixed(2)} seconds`
                 : 'N/A';
-            const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
+            const rtfx = transcription.rtfx ? `${transcription.rtfx >= 100 ? transcription.rtfx.toFixed(0) : transcription.rtfx.toFixed(1)}x` : 'N/A';
 
             let metaHTML = `
                 <div class="transcription-meta">
@@ -1418,7 +1468,7 @@ class SpeechHub {
 
         const processingTime = result.processing_time.toFixed(2);
         const duration = result.duration.toFixed(2);
-        const rtfx = result.rtfx ? result.rtfx.toFixed(1) : 'N/A';
+        const rtfx = result.rtfx ? (result.rtfx >= 100 ? result.rtfx.toFixed(0) : result.rtfx.toFixed(1)) : 'N/A';
 
         resultCard.innerHTML = `
             <div class="result-header">
@@ -1461,7 +1511,7 @@ class SpeechHub {
             } else {
                 const processingTime = modelResult.processing_time.toFixed(2);
                 const duration = modelResult.duration.toFixed(2);
-                const rtfx = modelResult.rtfx ? modelResult.rtfx.toFixed(1) : 'N/A';
+                const rtfx = modelResult.rtfx ? (modelResult.rtfx >= 100 ? modelResult.rtfx.toFixed(0) : modelResult.rtfx.toFixed(1)) : 'N/A';
 
                 resultCard.innerHTML = `
                     <div class="result-header">
