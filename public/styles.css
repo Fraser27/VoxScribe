@@ -1298,6 +1298,30 @@ Modal Styles */
     padding: 0.25rem 0.5rem;
     border-radius: 0.25rem;
     font-weight: 600;
+    cursor: help;
+    transition: background-color 0.2s ease;
+}
+
+.stat.rtfx:hover {
+    background-color: var(--primary-color);
+}
+
+/* RTFx performance indicators */
+.stat.rtfx[title*="RTFx: 0."],
+.stat.rtfx[title*="RTFx: 0,"] {
+    background-color: #ef4444; /* Red for slow performance */
+}
+
+.stat.rtfx[title*="RTFx: 1."],
+.stat.rtfx[title*="RTFx: 1,"] {
+    background-color: #f59e0b; /* Orange for real-time */
+}
+
+.history-rtfx {
+    color: var(--text-tertiary);
+    font-size: 0.85em;
+    font-weight: 500;
+    cursor: help;
 }
 
 .history-actions {
