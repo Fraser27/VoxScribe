@@ -1,6 +1,6 @@
-// SpeechHub Frontend JavaScript
+// VoxScribe Frontend JavaScript
 
-class SpeechHub {
+class VoxScribe {
     constructor() {
         this.currentMode = 'single';
         this.selectedFile = null;
@@ -954,7 +954,7 @@ class SpeechHub {
                     <div class="cached-model-name">${model.display_name}</div>
                     <div class="cached-model-details">${model.engine} • ${model.size}</div>
                 </div>
-                <button class="delete-model-btn" onclick="speechHub.deleteModel('${model.engine}', '${model.model_id}')" title="Delete cached model">
+                <button class="delete-model-btn" onclick="voxScribe.deleteModel('${model.engine}', '${model.model_id}')" title="Delete cached model">
                     <i class="fas fa-trash"></i>
                 </button>
             `;
@@ -1162,10 +1162,10 @@ class SpeechHub {
                         <td><span class="history-status ${statusClass}">${statusText}</span></td>
                         <td>
                             <div class="history-table-actions">
-                                <button class="btn-view" onclick="speechHub.showTranscriptionDetail('${transcription.id}')">
+                                <button class="btn-view" onclick="voxScribe.showTranscriptionDetail('${transcription.id}')">
                                     <i class="fas fa-eye"></i> View
                                 </button>
-                                <button class="btn-delete-small" onclick="speechHub.deleteTranscriptionFromHistory('${transcription.id}')">
+                                <button class="btn-delete-small" onclick="voxScribe.deleteTranscriptionFromHistory('${transcription.id}')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -1641,7 +1641,7 @@ class SpeechHub {
     }
 
     setupTheme() {
-        const savedTheme = localStorage.getItem('speechhub-theme') || 'light';
+        const savedTheme = localStorage.getItem('voxscribe-theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
         this.updateThemeIcon(savedTheme);
     }
@@ -1651,7 +1651,7 @@ class SpeechHub {
         const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
         document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('speechhub-theme', newTheme);
+        localStorage.setItem('voxscribe-theme', newTheme);
         this.updateThemeIcon(newTheme);
     }
 
@@ -1662,7 +1662,7 @@ class SpeechHub {
 }
 
 // Initialize the application
-let speechHub;
+let voxScribe;
 document.addEventListener('DOMContentLoaded', () => {
-    speechHub = new SpeechHub();
+    voxScribe = new VoxScribe();
 });
