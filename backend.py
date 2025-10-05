@@ -38,6 +38,8 @@ from pydantic import BaseModel
 import asyncio
 from typing import Set, Dict
 
+NVIDIA_TRANSFORMERS_VERSION = "4.53.3"
+VOXTRAL_TRANSFORMERS_VERSION = "4.56.0"
 # Initialize FastAPI app
 app = FastAPI(
     title="SpeechHub API",
@@ -232,7 +234,12 @@ class WebSocketManager:
         )
 
     async def send_dependency_complete(
-        self, dependency: str, success: bool, error: str = None, engine: str = None, model_id: str = None
+        self,
+        dependency: str,
+        success: bool,
+        error: str = None,
+        engine: str = None,
+        model_id: str = None,
     ):
         """Send dependency installation completion notification."""
         await self.send_to_all(
@@ -310,11 +317,17 @@ class WebSocketManager:
 
             if dependency_needed:
                 await self.send_download_progress(
-                    engine, model_id, 10, "preparing", f"Installing {dependency_needed} dependencies..."
+                    engine,
+                    model_id,
+                    10,
+                    "preparing",
+                    f"Installing {dependency_needed} dependencies...",
                 )
-                
+
                 try:
-                    await install_deps_with_websocket(dependency_needed, engine, model_id)
+                    await install_deps_with_websocket(
+                        dependency_needed, engine, model_id
+                    )
                 except Exception as e:
                     logger.error(f"Dependency installation failed: {e}")
                     raise
@@ -573,7 +586,9 @@ class TranscriptionLogger:
             f"Comparison completed: {successful_models}/{len(models)} models successful in {total_time:.2f}s"
         )
 
-    def log_model_delete(self, engine: str, model_id: str, success: bool, error: str = None):
+    def log_model_delete(
+        self, engine: str, model_id: str, success: bool, error: str = None
+    ):
         """Log model cache deletion."""
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
@@ -629,6 +644,7 @@ class TranscriptionManager:
     def generate_transcription_id(self):
         """Generate a unique transcription ID."""
         import uuid
+
         return str(uuid.uuid4())
 
     def save_transcription(
@@ -642,6 +658,7 @@ class TranscriptionManager:
         csv_data: List[List[str]],
         success: bool = True,
         error: str = None,
+        rtfx: float = None,
     ):
         """Save transcription results and metadata."""
         try:
@@ -655,6 +672,7 @@ class TranscriptionManager:
                 "audio_filename": audio_filename,
                 "audio_duration_seconds": audio_duration,
                 "transcription_duration_seconds": transcription_duration,
+                "rtfx": rtfx,
                 "success": success,
                 "error": error,
                 "device": DEVICE,
@@ -664,16 +682,20 @@ class TranscriptionManager:
                 # Save CSV data to file
                 csv_filename = f"{transcription_id}.json"
                 csv_filepath = self.transcriptions_dir / csv_filename
-                
+
                 with open(csv_filepath, "w", encoding="utf-8") as f:
                     json.dump({"csv_data": csv_data}, f, indent=2, ensure_ascii=False)
-                
+
                 transcription_entry["csv_file"] = csv_filename
-                transcription_entry["segments_count"] = len(csv_data) - 1  # Subtract header row
+                transcription_entry["segments_count"] = (
+                    len(csv_data) - 1
+                )  # Subtract header row
 
             # Add to metadata
-            self.metadata["transcriptions"].insert(0, transcription_entry)  # Most recent first
-            
+            self.metadata["transcriptions"].insert(
+                0, transcription_entry
+            )  # Most recent first
+
             # Keep only last 100 transcriptions to prevent file from growing too large
             if len(self.metadata["transcriptions"]) > 100:
                 # Remove old transcription files
@@ -682,7 +704,7 @@ class TranscriptionManager:
                         old_csv_path = self.transcriptions_dir / old_entry["csv_file"]
                         if old_csv_path.exists():
                             old_csv_path.unlink()
-                
+
                 self.metadata["transcriptions"] = self.metadata["transcriptions"][:100]
 
             self.save_metadata()
@@ -724,8 +746,8 @@ class TranscriptionManager:
         """Get list of transcriptions with pagination."""
         try:
             total = len(self.metadata["transcriptions"])
-            transcriptions = self.metadata["transcriptions"][offset:offset + limit]
-            
+            transcriptions = self.metadata["transcriptions"][offset : offset + limit]
+
             # Return metadata without CSV data for list view
             result = []
             for entry in transcriptions:
@@ -739,12 +761,18 @@ class TranscriptionManager:
                 "total": total,
                 "limit": limit,
                 "offset": offset,
-                "has_more": offset + limit < total
+                "has_more": offset + limit < total,
             }
 
         except Exception as e:
             logger.error(f"Failed to get transcriptions list: {e}")
-            return {"transcriptions": [], "total": 0, "limit": limit, "offset": offset, "has_more": False}
+            return {
+                "transcriptions": [],
+                "total": 0,
+                "limit": limit,
+                "offset": offset,
+                "has_more": False,
+            }
 
     def delete_transcription(self, transcription_id: str):
         """Delete a transcription and its files."""
@@ -872,11 +900,11 @@ def _check_voxtral_support():
         import transformers
 
         version = transformers.__version__
-        supported = version >= "4.56.0"
+        supported = version >= VOXTRAL_TRANSFORMERS_VERSION
 
         if not supported:
             logger.warning(
-                f"Voxtral not supported: transformers version {version} < 4.56.0"
+                f"Voxtral not supported: transformers version {version} < {VOXTRAL_TRANSFORMERS_VERSION}"
             )
         else:
             logger.info(f"Voxtral supported: transformers version {version}")
@@ -893,16 +921,22 @@ def _check_voxtral_support():
 def _check_nemo_support():
     """Internal function to check NeMo support."""
     try:
-        # If we've already successfully imported NeMo, don't try again
+        # Initialize supported variable
+        supported = False
+
+        # Check transformers version first
         import transformers
 
         version = transformers.__version__
-        supported = version == "4.51.0"
+        if version == NVIDIA_TRANSFORMERS_VERSION:
+            supported = True
 
         if supported:
             logger.info(f"NeMo toolkit supported: Transformers=={version} loaded")
         else:
-            logger.error(f"NeMo toolkit not supported: Transformers=={version} loaded")
+            logger.error(
+                f"NeMo toolkit not supported: Transformers=={version} loaded, expected {NVIDIA_TRANSFORMERS_VERSION}"
+            )
             return False
 
         # Try to import NeMo components
@@ -1041,13 +1075,13 @@ class ModelManager:
     def delete_model_cache(self, engine, model_id):
         """Delete a cached model and remove from cache info."""
         cache_key = f"{engine}:{model_id}"
-        
+
         try:
             # Remove from cache info first
             if cache_key in self.cache_info:
                 del self.cache_info[cache_key]
                 self.save_cache_info()
-            
+
             # Delete physical files
             if engine == "whisper":
                 cache_dir = self.registry[engine][model_id]["cache_dir"]
@@ -1055,43 +1089,46 @@ class ModelManager:
                 if model_file.exists():
                     model_file.unlink()
                     logger.info(f"Deleted Whisper model file: {model_file}")
-                
+
                 # Also check for any other files in the cache directory
                 if cache_dir.exists():
                     for file in cache_dir.glob(f"{model_id}*"):
                         file.unlink()
                         logger.info(f"Deleted additional file: {file}")
-                        
+
             elif engine == "nvidia":
                 # For NeMo models, delete both local cache and huggingface cache
                 cache_dir = self.registry[engine][model_id]["cache_dir"]
-                
+
                 # Delete local cache directory
                 if cache_dir.exists():
                     import shutil
+
                     shutil.rmtree(cache_dir)
                     logger.info(f"Deleted NeMo local cache directory: {cache_dir}")
-                
+
                 # Delete from huggingface cache
                 hf_cache_dir = BASE_MODELS_DIR / "huggingface" / "hub"
                 model_name_safe = model_id.replace("/", "--")
                 hf_model_dir = hf_cache_dir / f"models--{model_name_safe}"
                 if hf_model_dir.exists():
                     import shutil
+
                     shutil.rmtree(hf_model_dir)
                     logger.info(f"Deleted HuggingFace cache directory: {hf_model_dir}")
-                    
+
             else:
                 # For other engines (like voxtral), delete the cache directory
                 cache_dir = self.registry[engine][model_id]["cache_dir"]
                 if cache_dir.exists():
                     import shutil
+
                     shutil.rmtree(cache_dir)
                     logger.info(f"Deleted cache directory: {cache_dir}")
-            
+
             logger.info(f"Successfully deleted model cache for {engine}/{model_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error deleting model cache for {engine}/{model_id}: {e}")
             return False
@@ -1100,7 +1137,7 @@ class ModelManager:
         """Get the actual disk size of a cached model."""
         try:
             cache_dir = self.get_cache_dir(engine, model_id)
-            
+
             if engine == "whisper":
                 model_file = cache_dir / f"{model_id}.pt"
                 if model_file.exists():
@@ -1109,20 +1146,26 @@ class ModelManager:
                 # Check both local and HF cache
                 total_size = 0
                 if cache_dir.exists():
-                    total_size += sum(f.stat().st_size for f in cache_dir.rglob('*') if f.is_file())
-                
+                    total_size += sum(
+                        f.stat().st_size for f in cache_dir.rglob("*") if f.is_file()
+                    )
+
                 # Check HF cache
                 hf_cache_dir = BASE_MODELS_DIR / "huggingface" / "hub"
                 model_name_safe = model_id.replace("/", "--")
                 hf_model_dir = hf_cache_dir / f"models--{model_name_safe}"
                 if hf_model_dir.exists():
-                    total_size += sum(f.stat().st_size for f in hf_model_dir.rglob('*') if f.is_file())
-                
+                    total_size += sum(
+                        f.stat().st_size for f in hf_model_dir.rglob("*") if f.is_file()
+                    )
+
                 return total_size
             else:
                 if cache_dir.exists():
-                    return sum(f.stat().st_size for f in cache_dir.rglob('*') if f.is_file())
-            
+                    return sum(
+                        f.stat().st_size for f in cache_dir.rglob("*") if f.is_file()
+                    )
+
             return 0
         except Exception as e:
             logger.error(f"Error getting cache size for {engine}/{model_id}: {e}")
@@ -1194,7 +1237,7 @@ def load_model(engine, model_id):
                     # Synchronous fallback for now
                     install_deps(engine)
                 except Exception as e:
-                    error_msg = f"Voxtral requires transformers 4.56.0+. {e}"
+                    error_msg = f"Voxtral requires transformers {VOXTRAL_TRANSFORMERS_VERSION}+. {e}"
                     transcription_logger.log_dependency_error(
                         engine, model_id, "transformers", error_msg
                     )
@@ -1323,7 +1366,9 @@ def format_time(seconds):
     return str(datetime.timedelta(seconds=seconds)).split(".")[0]
 
 
-def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None, save_to_history=True):
+def transcribe_audio(
+    engine, audio_path, model_id, filename=None, file_size=None, save_to_history=True
+):
     """Unified transcription method for all STT engines."""
     total_start_time = time.time()
 
@@ -1339,7 +1384,9 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
             file_size = 0
 
     # Generate transcription ID for history
-    transcription_id = transcription_manager.generate_transcription_id() if save_to_history else None
+    transcription_id = (
+        transcription_manager.generate_transcription_id() if save_to_history else None
+    )
 
     # Log transcription start
     transcription_logger.log_transcription_start(engine, model_id, filename, file_size)
@@ -1362,7 +1409,7 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
         try:
             # Start measuring actual transcription time
             transcription_start_time = time.time()
-            
+
             if engine == "whisper":
                 model = model_result
                 result = model.transcribe(processed_path, word_timestamps=True)
@@ -1528,6 +1575,11 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
             # Calculate actual transcription time (excluding model load and audio processing)
             transcription_time = time.time() - transcription_start_time
             total_processing_time = time.time() - total_start_time
+            
+            # Calculate RTFx (Real-Time Factor)
+            # RTFx = audio_duration / processing_time
+            # Higher RTFx means faster processing (more audio processed per second of processing time)
+            rtfx = duration_sec / total_processing_time if total_processing_time > 0 else 0
 
             # Log successful transcription
             transcription_logger.log_transcription_complete(
@@ -1544,7 +1596,8 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
                     audio_duration=duration_sec,
                     transcription_duration=transcription_time,
                     csv_data=csv_data,
-                    success=True
+                    success=True,
+                    rtfx=rtfx,
                 )
 
             return {
@@ -1553,6 +1606,7 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
                 "processing_time": total_processing_time,
                 "transcription_time": transcription_time,
                 "duration": duration_sec,
+                "rtfx": rtfx,
                 "transcription_id": transcription_id,
             }
 
@@ -1584,13 +1638,13 @@ def transcribe_audio(engine, audio_path, model_id, filename=None, file_size=None
                 transcription_duration=0,
                 csv_data=[],
                 success=False,
-                error=error_msg
+                error=error_msg,
             )
 
         return {
-            "success": False, 
+            "success": False,
             "error": error_msg,
-            "transcription_id": transcription_id
+            "transcription_id": transcription_id,
         }
 
 
@@ -1908,7 +1962,12 @@ async def compare_models(
                 continue
 
             result = transcribe_audio(
-                engine, audio_path, model_id, file.filename, len(content), save_to_history=True
+                engine,
+                audio_path,
+                model_id,
+                file.filename,
+                len(content),
+                save_to_history=True,
             )
             results[f"{engine}_{model_id}"] = result
 
@@ -1958,48 +2017,43 @@ async def install_dependency(request: DependencyRequest):
 @app.delete("/api/models/{engine}/{model_id}")
 async def delete_model_cache(engine: str, model_id: str):
     """Delete a cached model."""
-    
+
     # Validate engine and model
     if engine not in MODEL_REGISTRY or model_id not in MODEL_REGISTRY[engine]:
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
-    
+
     # Check if model is currently being used (downloading)
     if websocket_manager.is_downloading(engine, model_id):
         raise HTTPException(
-            status_code=400, 
-            detail="Cannot delete model while it's being downloaded"
+            status_code=400, detail="Cannot delete model while it's being downloaded"
         )
-    
+
     # Check if model is actually cached
     if not model_manager.is_model_cached(engine, model_id):
-        raise HTTPException(
-            status_code=404, 
-            detail="Model is not cached"
-        )
-    
+        raise HTTPException(status_code=404, detail="Model is not cached")
+
     try:
         # Log the deletion attempt
         logger.info(f"Attempting to delete cached model: {engine}/{model_id}")
-        
+
         # Delete the model cache
         success = model_manager.delete_model_cache(engine, model_id)
-        
+
         if success:
             # Log successful deletion
             transcription_logger.log_model_delete(engine, model_id, True)
-            
+
             return {
-                "success": True, 
-                "message": f"Model {engine}/{model_id} deleted successfully"
+                "success": True,
+                "message": f"Model {engine}/{model_id} deleted successfully",
             }
         else:
             # Log failed deletion
-            transcription_logger.log_model_delete(engine, model_id, False, "Failed to delete model cache")
-            raise HTTPException(
-                status_code=500, 
-                detail="Failed to delete model cache"
+            transcription_logger.log_model_delete(
+                engine, model_id, False, "Failed to delete model cache"
             )
-            
+            raise HTTPException(status_code=500, detail="Failed to delete model cache")
+
     except Exception as e:
         error_msg = str(e)
         # Log failed deletion
@@ -2008,7 +2062,9 @@ async def delete_model_cache(engine: str, model_id: str):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-async def install_deps_with_websocket(dependency: str, engine: str = None, model_id: str = None):
+async def install_deps_with_websocket(
+    dependency: str, engine: str = None, model_id: str = None
+):
     """Install dependencies with WebSocket progress updates."""
     # Validate dependency type first
     if dependency not in ["voxtral", "nvidia"]:
@@ -2027,48 +2083,85 @@ async def install_deps_with_websocket(dependency: str, engine: str = None, model
 
     try:
         await websocket_manager.send_dependency_progress(
-            dependency, 0, "preparing", "Preparing environment for dependency installation...", engine, model_id
+            dependency,
+            0,
+            "preparing",
+            "Preparing environment for dependency installation...",
+            engine,
+            model_id,
         )
 
         if dependency == "voxtral":
             await websocket_manager.send_dependency_progress(
-                dependency, 20, "installing", "Installing transformers 4.56.0+...", engine, model_id
+                dependency,
+                20,
+                "installing",
+                f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}+...",
+                engine,
+                model_id,
             )
-            
-            logger.info("Installing transformers 4.56.0")
-            command = [sys.executable, "-m", "pip", "install", "transformers>=4.56.0"]
-            
+
+            logger.info(f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}")
+            command = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                f"transformers>={VOXTRAL_TRANSFORMERS_VERSION}",
+            ]
+
             # Run pip install in executor to avoid blocking
             process = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: subprocess.run(command, capture_output=True, text=True, check=True)
+                None,
+                lambda: subprocess.run(
+                    command, capture_output=True, text=True, check=True
+                ),
             )
 
             await websocket_manager.send_dependency_progress(
-                dependency, 80, "configuring", "Refreshing module cache...", engine, model_id
+                dependency,
+                80,
+                "configuring",
+                "Refreshing module cache...",
+                engine,
+                model_id,
             )
 
             # Clear cache and refresh imports
             _clear_module_cache_and_refresh(["transformers"])
 
-            message = "Transformers 4.56.0 installed successfully"
+            message = (
+                f"Transformers {VOXTRAL_TRANSFORMERS_VERSION} installed successfully"
+            )
 
         elif dependency == "nvidia":
             await websocket_manager.send_dependency_progress(
-                dependency, 20, "installing", "Installing transformers 4.51.0...", engine, model_id
+                dependency,
+                20,
+                "installing",
+                "Installing transformers 4.51.0...",
+                engine,
+                model_id,
             )
-            
+
             logger.info("Installing transformers 4.51.0")
             command = [sys.executable, "-m", "pip", "install", "transformers==4.51.0"]
-            
+
             # Run pip install in executor to avoid blocking
             process = await asyncio.get_event_loop().run_in_executor(
-                None, 
-                lambda: subprocess.run(command, capture_output=True, text=True, check=True)
+                None,
+                lambda: subprocess.run(
+                    command, capture_output=True, text=True, check=True
+                ),
             )
 
             await websocket_manager.send_dependency_progress(
-                dependency, 80, "configuring", "Refreshing module cache...", engine, model_id
+                dependency,
+                80,
+                "configuring",
+                "Refreshing module cache...",
+                engine,
+                model_id,
             )
 
             # Clear cache and refresh imports
@@ -2097,14 +2190,19 @@ async def install_deps_with_websocket(dependency: str, engine: str = None, model
         transcription_logger.log_dependency_install_complete(
             dependency, False, error_msg, install_time
         )
-        
+
         await websocket_manager.send_dependency_progress(
-            dependency, 0, "error", f"Installation failed: {error_msg}", engine, model_id
+            dependency,
+            0,
+            "error",
+            f"Installation failed: {error_msg}",
+            engine,
+            model_id,
         )
         await websocket_manager.send_dependency_complete(
             dependency, False, error_msg, engine, model_id
         )
-        
+
         raise HTTPException(status_code=500, detail=error_msg)
     except Exception as e:
         install_time = time.time() - install_start_time
@@ -2112,14 +2210,14 @@ async def install_deps_with_websocket(dependency: str, engine: str = None, model
         transcription_logger.log_dependency_install_complete(
             dependency, False, error_msg, install_time
         )
-        
+
         await websocket_manager.send_dependency_progress(
             dependency, 0, "error", error_msg, engine, model_id
         )
         await websocket_manager.send_dependency_complete(
             dependency, False, error_msg, engine, model_id
         )
-        
+
         raise HTTPException(status_code=500, detail=error_msg)
 
 
@@ -2139,24 +2237,40 @@ def install_deps(dependency: str):
 
     try:
         if dependency == "voxtral":
-            logger.info("Installing transformers 4.56.0")
-            command = [sys.executable, "-m", "pip", "install", "transformers>=4.56.0"]
+            logger.info(f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}")
+            command = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                f"transformers>={VOXTRAL_TRANSFORMERS_VERSION}",
+            ]
             subprocess.run(command, capture_output=True, text=True, check=True)
 
             # Clear cache and refresh imports
             _clear_module_cache_and_refresh(["transformers"])
 
-            message = "Transformers 4.56.0 installed successfully"
+            message = (
+                f"Transformers {VOXTRAL_TRANSFORMERS_VERSION} installed successfully"
+            )
 
         elif dependency == "nvidia":
-            logger.info("Installing transformers 4.51.0")
-            command = [sys.executable, "-m", "pip", "install", "transformers==4.51.0"]
+            logger.info(f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}")
+            command = [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                f"transformers=={NVIDIA_TRANSFORMERS_VERSION}",
+            ]
             subprocess.run(command, capture_output=True, text=True, check=True)
 
             # Clear cache and refresh imports
             _clear_module_cache_and_refresh(["transformers"])
 
-            message = "Transformers 4.51.0 installed successfully"
+            message = (
+                f"Transformers {NVIDIA_TRANSFORMERS_VERSION} installed successfully"
+            )
 
         install_time = time.time() - install_start_time
         transcription_logger.log_dependency_install_complete(
@@ -2178,7 +2292,9 @@ def install_deps(dependency: str):
 async def get_transcriptions(limit: int = 50, offset: int = 0):
     """Get list of transcription history."""
     try:
-        result = transcription_manager.get_transcriptions_list(limit=limit, offset=offset)
+        result = transcription_manager.get_transcriptions_list(
+            limit=limit, offset=offset
+        )
         return result
     except Exception as e:
         logger.error(f"Error getting transcriptions list: {e}")
@@ -2222,34 +2338,37 @@ async def download_transcription_csv(transcription_id: str):
         transcription = transcription_manager.get_transcription(transcription_id)
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcription not found")
-        
+
         if not transcription.get("csv_data"):
-            raise HTTPException(status_code=404, detail="No transcription data available")
+            raise HTTPException(
+                status_code=404, detail="No transcription data available"
+            )
 
         # Convert to CSV format
         import io
         import csv
-        
+
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         for row in transcription["csv_data"]:
             writer.writerow(row)
-        
+
         csv_content = output.getvalue()
         output.close()
 
         # Create filename
         timestamp = transcription["timestamp"][:10]  # YYYY-MM-DD
         filename = f"transcription_{timestamp}_{transcription['engine']}_{transcription['model_id']}.csv"
-        
+
         from fastapi.responses import Response
+
         return Response(
             content=csv_content,
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={"Content-Disposition": f"attachment; filename={filename}"},
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
