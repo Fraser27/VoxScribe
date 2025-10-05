@@ -89,7 +89,7 @@ class SpeechHub {
         const { engine, model_id, progress, status, message } = data;
 
         // Update progress modal
-        document.getElementById('progressModalTitle').textContent = 'Downloading Model';
+        document.getElementById('progressModalTitle').textContent = 'Downloading Model. This will take a couple of minutes';
         document.getElementById('progressModelName').textContent = `${engine}/${model_id}`;
         document.getElementById('progressStatus').textContent = status;
         document.getElementById('downloadProgressFill').style.width = `${progress}%`;
@@ -998,6 +998,7 @@ class SpeechHub {
                 const duration = transcription.transcription_duration_seconds
                     ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
                     : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
 
                 historyItem.innerHTML = `
                     <div class="history-item-header">
@@ -1009,6 +1010,7 @@ class SpeechHub {
                     <div class="history-item-details">
                         <div class="history-model">${transcription.model_display_name}</div>
                         <div class="history-duration">${duration}</div>
+                        <div class="history-rtfx" title="Real-Time Factor">RTFx: ${rtfx}</div>
                     </div>
                 `;
 
@@ -1051,6 +1053,7 @@ class SpeechHub {
                             <th>Audio File</th>
                             <th>Model</th>
                             <th>Duration</th>
+                            <th>RTFx</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -1065,6 +1068,7 @@ class SpeechHub {
                 const duration = transcription.transcription_duration_seconds
                     ? `${transcription.transcription_duration_seconds.toFixed(1)}s`
                     : 'N/A';
+                const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
 
                 tableHTML += `
                     <tr>
@@ -1072,6 +1076,7 @@ class SpeechHub {
                         <td title="${transcription.audio_filename}">${transcription.audio_filename}</td>
                         <td>${transcription.model_display_name}</td>
                         <td>${duration}</td>
+                        <td title="Real-Time Factor">${rtfx}</td>
                         <td><span class="history-status ${statusClass}">${statusText}</span></td>
                         <td>
                             <div class="history-table-actions">
@@ -1124,6 +1129,7 @@ class SpeechHub {
             const audioDuration = transcription.audio_duration_seconds
                 ? `${transcription.audio_duration_seconds.toFixed(2)} seconds`
                 : 'N/A';
+            const rtfx = transcription.rtfx ? `${transcription.rtfx.toFixed(1)}x` : 'N/A';
 
             let metaHTML = `
                 <div class="transcription-meta">
@@ -1146,6 +1152,10 @@ class SpeechHub {
                     <div class="meta-item">
                         <div class="meta-label">Transcription Time</div>
                         <div class="meta-value">${duration}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">RTFx (Real-Time Factor)</div>
+                        <div class="meta-value" title="Real-Time Factor: ${rtfx} means ${rtfx.replace('x', '')} seconds of audio processed per second of processing time">${rtfx}</div>
                     </div>
                     <div class="meta-item">
                         <div class="meta-label">Status</div>
@@ -1408,6 +1418,7 @@ class SpeechHub {
 
         const processingTime = result.processing_time.toFixed(2);
         const duration = result.duration.toFixed(2);
+        const rtfx = result.rtfx ? result.rtfx.toFixed(1) : 'N/A';
 
         resultCard.innerHTML = `
             <div class="result-header">
@@ -1415,6 +1426,7 @@ class SpeechHub {
                 <div class="result-stats">
                     <span class="stat">Processing: ${processingTime}s</span>
                     <span class="stat">Duration: ${duration}s</span>
+                    <span class="stat rtfx" title="Real-Time Factor: ${rtfx}x means ${rtfx} seconds of audio processed per second of processing time">RTFx: ${rtfx}x</span>
                 </div>
             </div>
             <div class="result-content">
@@ -1449,6 +1461,7 @@ class SpeechHub {
             } else {
                 const processingTime = modelResult.processing_time.toFixed(2);
                 const duration = modelResult.duration.toFixed(2);
+                const rtfx = modelResult.rtfx ? modelResult.rtfx.toFixed(1) : 'N/A';
 
                 resultCard.innerHTML = `
                     <div class="result-header">
@@ -1456,6 +1469,7 @@ class SpeechHub {
                         <div class="result-stats">
                             <span class="stat">Processing: ${processingTime}s</span>
                             <span class="stat">Duration: ${duration}s</span>
+                            <span class="stat rtfx" title="Real-Time Factor: ${rtfx}x means ${rtfx} seconds of audio processed per second of processing time">RTFx: ${rtfx}x</span>
                         </div>
                     </div>
                     <div class="result-content">
