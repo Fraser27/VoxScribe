@@ -2373,6 +2373,18 @@ def install_deps(dependency: str):
             dependency, True, None, install_time
         )
 
+        # Send WebSocket completion message for standalone dependency installs
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(
+                    websocket_manager.send_dependency_complete(
+                        dependency, True, None, None, None
+                    )
+                )
+        except:
+            pass  # Ignore WebSocket errors in sync context
+
         return {"success": True, "message": message}
 
     except subprocess.CalledProcessError as e:
@@ -2381,6 +2393,19 @@ def install_deps(dependency: str):
         transcription_logger.log_dependency_install_complete(
             dependency, False, error_msg, install_time
         )
+        
+        # Send WebSocket completion message for standalone dependency installs
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(
+                    websocket_manager.send_dependency_complete(
+                        dependency, False, error_msg, None, None
+                    )
+                )
+        except:
+            pass  # Ignore WebSocket errors in sync context
+            
         raise HTTPException(status_code=500, detail=error_msg)
 
 
