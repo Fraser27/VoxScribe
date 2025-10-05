@@ -139,8 +139,10 @@ class SpeechHub {
             if (engine && model_id) {
                 this.showToast(`Continuing with ${engine}/${model_id} download...`, 'info');
             } else {
-                // Hide progress modal if this was a standalone dependency install
-                this.hideDownloadProgressModal();
+                // Hide progress modal after a short delay for standalone dependency install
+                setTimeout(() => {
+                    this.hideDownloadProgressModal();
+                }, 1000);
             }
         } else {
             this.showToast(`Dependency installation failed: ${error}`, 'error');
