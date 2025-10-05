@@ -291,6 +291,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3><i class="fas fa-download"></i> <span id="progressModalTitle">Downloading Model</span></h3>
+                <button class="modal-close" id="downloadProgressModalClose">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="download-progress-info">
@@ -307,6 +308,9 @@
                 <p id="downloadProgressText" class="progress-text">Initializing...</p>
             </div>
             <div class="modal-footer">
+                <button id="closeProgressModal" class="btn btn-primary">
+                    <i class="fas fa-times"></i> Close
+                </button>
                 <button id="cancelDownloadProgress" class="btn btn-secondary" disabled>
                     Cancel
                 </button>
