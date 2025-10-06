@@ -402,17 +402,20 @@ class WebSocketManager:
         try:
             logger.info(f"Starting download for {engine}/{model_id}")
             await self.send_download_progress(
-                engine, model_id, 0, "starting", "Initializing download..."
+                engine, model_id, 10, "starting", "Initializing download..."
             )
 
             # Check if model is already cached
             if model_manager.is_model_cached(engine, model_id):
                 logger.info(f"Model {engine}/{model_id} already cached")
+                await self.send_download_progress(
+                    engine, model_id, 75, "downloading", f"Loading model {engine}/{model_id} from cache..."
+                )
                 await self.send_download_complete(engine, model_id, True)
                 return
 
             await self.send_download_progress(
-                engine, model_id, 20, "downloading", "Downloading model files..."
+                engine, model_id, 25, "downloading", "Downloading model files..."
             )
 
             # Check if dependencies are available
