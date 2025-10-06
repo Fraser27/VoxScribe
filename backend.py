@@ -64,22 +64,61 @@ def _clear_module_cache_and_refresh(modules_to_clear=None):
 
 def ensure_transformers_version():
     """Ensure transformers is at the required version before startup."""
-    import transformers
-    current_version = transformers.__version__
+    try:
+        import transformers
+        current_version = transformers.__version__
 
-    if version.parse(current_version) >= version.parse(UNIFIED_TRANSFORMERS_VERSION):
-        print(
+        if version.parse(current_version) >= version.parse(UNIFIED_TRANSFORMERS_VERSION):
+            print(
                 f"✓ Transformers version {current_version} meets requirement (>= {UNIFIED_TRANSFORMERS_VERSION})"
-        )
-        return current_version
-    else:
-        print(
-            f"Transformers version {current_version} is below required {UNIFIED_TRANSFORMERS_VERSION}"
-        )
-        print("Upgrading transformers...")
-        # Upgrade transformers
-        import subprocess
-        import sys
+            )
+            return current_version
+        else:
+            print(
+                f"⚠ Transformers version {current_version} is below required {UNIFIED_TRANSFORMERS_VERSION}"
+            )
+            print("Upgrading transformers...")
+            
+            # Upgrade transformers
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        f"transformers>={UNIFIED_TRANSFORMERS_VERSION}",
+                        "--upgrade",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                print("✓ Transformers upgrade completed")
+                print("Refreshing module cache...")
+                
+                # Clear module cache and refresh
+                _clear_module_cache_and_refresh(["transformers"])
+                
+                # Re-import and verify
+                import transformers
+                new_version = transformers.__version__
+                if version.parse(new_version) >= version.parse(UNIFIED_TRANSFORMERS_VERSION):
+                    print(f"✓ Transformers successfully upgraded to {new_version}")
+                    return new_version
+                else:
+                    print(f"✗ Upgrade failed: still at version {new_version}")
+                    return None
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"✗ Failed to upgrade transformers: {e}")
+                print(f"stdout: {e.stdout}")
+                print(f"stderr: {e.stderr}")
+                return None
+                
+    except ImportError:
+        print("⚠ Transformers not installed, installing...")
+        
         try:
             result = subprocess.run(
                 [
@@ -88,31 +127,21 @@ def ensure_transformers_version():
                     "pip",
                     "install",
                     f"transformers>={UNIFIED_TRANSFORMERS_VERSION}",
-                    "--upgrade",
                 ],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            print("✓ Transformers upgrade completed")
-            print("Refreshing module cache...")
-            # Clear module cache and refresh
-            _clear_module_cache_and_refresh(["transformers"])
-            # Re-import and verify
+            print("✓ Transformers installation completed")
+            
+            # Import and verify
             import transformers
             new_version = transformers.__version__
-            if version.parse(new_version) >= version.parse(
-                UNIFIED_TRANSFORMERS_VERSION
-            ):
-                print(f"✓ Transformers successfully upgraded to {new_version}")
-                return new_version
-            else:
-                print(f"✗ Upgrade failed: still at version {new_version}")
-                return None
+            print(f"✓ Transformers installed at version {new_version}")
+            return new_version
+            
         except subprocess.CalledProcessError as e:
-            print(f"✗ Failed to upgrade transformers: {e}")
-            print(f"stdout: {e.stdout}")
-            print(f"stderr: {e.stderr}")
+            print(f"✗ Failed to install transformers: {e}")
             return None
 
 
