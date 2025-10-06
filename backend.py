@@ -40,6 +40,20 @@ from typing import Set, Dict
 
 NVIDIA_TRANSFORMERS_VERSION = "4.53.3"
 VOXTRAL_TRANSFORMERS_VERSION = "4.56.0"
+
+try:
+    # We load with NeMO installed identify the transformers supported by the latest
+    # NeMo build
+    import nemo.collections.asr as nemo_asr
+    from nemo.collections.speechlm2.models import SALM
+    import transformers
+    NVIDIA_TRANSFORMERS_VERSION = transformers.__version__
+except Exception as e:
+    logger.error(f"Error checking transformers version {e}")
+
+        
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="VoxScribe API",
