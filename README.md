@@ -1,6 +1,35 @@
-# VoxScribe
+# VoxScribe 🎙️
 
-VoxScribe: A platform to test Opensource Speech-to-Text models
+## VoxScribe: A platform to test Opensource Speech-to-Text models
+
+VoxScribe is a lightweight, unified platform for testing and comparing multiple open-source speech-to-text (STT) models through a single interface. Born from real-world enterprise challenges where proprietary STT solutions become prohibitively expensive at scale, VoxScribe democratizes access to cutting-edge open-source alternatives.
+
+## The Problem We Solve
+
+Startups transcribing speech at scale face a common dilemma: **cost vs. control**. A contact center processing 100,000 hours of calls monthly can easily spend \$150,000+ on transcription alone. While open-source STT models like Whisper, Voxtral, Parakeet, and Canary-Qwen now rival proprietary solutions in accuracy, evaluating them has been a nightmare:
+
+- **Dependency Hell** 🔥: Conflicting library versions between models (transformers version conflicts between Voxtral and NeMo models)
+- **Inconsistent APIs** 🔄: Each model requires different integration approaches
+- **Complex Setup** ⚙️: Hours or days managing CUDA drivers, Python environments, and debugging
+- **Limited Comparison** 📊: No unified way to test multiple models against your specific use cases
+
+## What VoxScribe Offers
+
+✅ **Unified Interface**: Test 5+ open-source STT models through a single FastAPI backend and clean web UI  
+✅ **Dependency Management**: Handles version conflicts and library incompatibilities automatically  
+✅ **Side-by-Side Comparison**: Upload audio and compare transcriptions across multiple models  
+✅ **Model Caching**: Intelligent caching for faster subsequent runs  
+✅ **Clean API**: RESTful endpoints for easy integration into existing workflows  
+✅ **Cost Control**: Self-hosted solution puts you in control of transcription costs  
+
+## Supported Models
+
+- **OpenAI Whisper** - Industry standard baseline
+- **Mistral Voxtral** - Latest transformer-based approach
+- **NVIDIA Parakeet** - Enterprise-grade accuracy
+- **Canary-Qwen-2.5B** - Multilingual capabilities
+- **And growing...** - Easy to add new models
+
 
 ## Architecture
 
