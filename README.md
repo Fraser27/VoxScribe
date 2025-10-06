@@ -74,7 +74,7 @@ A clean separation of frontend and backend for the Universal Speech-to-Text Plat
 
 6. **Create and activate conda environment**
    ```bash
-   conda create -n voxscribe python=3.12
+   conda create -n voxscribe python=3.12 -y
    conda activate voxscribe
    ```
 
