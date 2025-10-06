@@ -697,20 +697,7 @@ select.form-control option:disabled {
     color: var(--error-color);
 }
 
-.btn-install {
-    background: var(--warning-color);
-    color: white;
-    border: none;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
 
-.btn-install:hover {
-    background: #EA580C;
-}
 
 .model-card {
     background: var(--bg-primary);
