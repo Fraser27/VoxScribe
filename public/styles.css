@@ -1755,7 +1755,9 @@ Modal Styles */
     color: var(--info-color);
 }
 
-* Collapsible Sidebar Styles */ .sidebar-header {
+/* Collapsible Sidebar Styles */ 
+
+.sidebar-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
