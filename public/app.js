@@ -69,14 +69,7 @@ class VoxScribe {
                 console.log('Handling download complete:', data);
                 this.handleDownloadComplete(data);
                 break;
-            case 'dependency_progress':
-                console.log('Handling dependency progress:', data);
-                this.updateDependencyProgress(data);
-                break;
-            case 'dependency_complete':
-                console.log('Handling dependency complete:', data);
-                this.handleDependencyComplete(data);
-                break;
+
             case 'pong':
                 console.log('WebSocket pong received');
                 break;
@@ -104,51 +97,7 @@ class VoxScribe {
         this.updateModelDownloadStatus(engine, model_id, true, false);
     }
 
-    updateDependencyProgress(data) {
-        const { dependency, progress, status, message, engine, model_id } = data;
 
-        // Update progress modal with dependency info
-        const modelName = engine && model_id ? `${engine}/${model_id}` : dependency;
-        document.getElementById('progressModalTitle').textContent = 'Installing Dependencies';
-        document.getElementById('progressModelName').textContent = modelName;
-        document.getElementById('progressStatus').textContent = `Installing ${dependency} - ${status}`;
-        document.getElementById('downloadProgressFill').style.width = `${progress}%`;
-        document.getElementById('downloadProgressText').textContent = message || `${progress}%`;
-
-        // Show progress modal if not already visible
-        if (document.getElementById('downloadProgressModal').style.display !== 'flex') {
-            this.showDownloadProgressModal();
-        }
-
-        // Show toast for major dependency progress updates
-        if (status === 'installing') {
-            this.showToast(`Installing ${dependency} dependencies...`, 'info');
-        }
-    }
-
-    async handleDependencyComplete(data) {
-        const { dependency, success, error, engine, model_id } = data;
-
-        if (success) {
-            this.showToast(`${dependency} dependencies installed successfully!`, 'success');
-
-            // Refresh status to update dependency availability
-            await this.loadStatus();
-
-            // If this was part of a model download, the download will continue automatically
-            if (engine && model_id) {
-                this.showToast(`Continuing with ${engine}/${model_id} download...`, 'info');
-            } else {
-                // Hide progress modal after a short delay for standalone dependency install
-                setTimeout(() => {
-                    this.hideDownloadProgressModal();
-                }, 1000);
-            }
-        } else {
-            this.showToast(`Dependency installation failed: ${error}`, 'error');
-            this.hideDownloadProgressModal();
-        }
-    }
 
     async handleDownloadComplete(data) {
         const { engine, model_id, success, error } = data;
@@ -341,14 +290,7 @@ class VoxScribe {
             this.handleCompareClick();
         });
 
-        // Dependency installation
-        document.getElementById('installVoxtral').addEventListener('click', () => {
-            this.installDependency('voxtral');
-        });
 
-        document.getElementById('installNemo').addEventListener('click', () => {
-            this.installDependency('nvidia');
-        });
 
         // Transcription history
         document.getElementById('viewAllHistoryBtn').addEventListener('click', () => {
@@ -758,35 +700,26 @@ class VoxScribe {
             'nemo': 'nemoStatus'
         };
 
-        const buttonIdMap = {
-            'voxtral': 'installVoxtral',
-            'nemo': 'installNemo'
-        };
-
         const statusId = statusIdMap[dependency];
-        const buttonId = buttonIdMap[dependency];
 
-        if (!statusId || !buttonId) {
+        if (!statusId) {
             console.error(`Unknown dependency: ${dependency}`);
             return;
         }
 
         const statusElement = document.getElementById(statusId);
-        const installButton = document.getElementById(buttonId);
 
-        if (!statusElement || !installButton) {
-            console.error(`Elements not found for dependency: ${dependency}`);
+        if (!statusElement) {
+            console.error(`Status element not found for dependency: ${dependency}`);
             return;
         }
 
         if (supported) {
             statusElement.textContent = 'Available';
             statusElement.className = 'dependency-status status-success';
-            installButton.style.display = 'none';
         } else {
-            statusElement.textContent = 'Not Available';
+            statusElement.textContent = 'Not Available (Install transformers 4.57.0+)';
             statusElement.className = 'dependency-status status-error';
-            installButton.style.display = 'inline-block';
         }
     }
 
@@ -926,6 +859,14 @@ class VoxScribe {
             `;
 
             compareModelsContainer.appendChild(modelCard);
+            
+            // Add event listener to the checkbox
+            const checkbox = modelCard.querySelector('input[type="checkbox"]');
+            if (checkbox && !disabled) {
+                checkbox.addEventListener('change', () => {
+                    this.updateUI();
+                });
+            }
         });
 
         this.updateUI();
@@ -995,66 +936,7 @@ class VoxScribe {
         }
     }
 
-    async installDependency(dependency) {
-        // Map dependency names to button IDs
-        const buttonIdMap = {
-            'voxtral': 'installVoxtral',
-            'nvidia': 'installNemo'
-        };
 
-        const buttonId = buttonIdMap[dependency];
-        if (!buttonId) {
-            console.error(`Unknown dependency: ${dependency}`);
-            return;
-        }
-
-        const button = document.getElementById(buttonId);
-        if (!button) {
-            console.error(`Button not found: ${buttonId}`);
-            return;
-        }
-
-        const originalText = button.innerHTML;
-
-        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Installing...';
-        button.disabled = true;
-
-        try {
-            // Show progress modal immediately
-            document.getElementById('progressModalTitle').textContent = 'Installing Dependencies';
-            document.getElementById('progressModelName').textContent = dependency;
-            document.getElementById('progressStatus').textContent = 'Preparing installation...';
-            document.getElementById('downloadProgressFill').style.width = '0%';
-            document.getElementById('downloadProgressText').textContent = 'Starting...';
-            this.showDownloadProgressModal();
-
-            const response = await fetch('/api/install-dependency', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ dependency })
-            });
-
-            const result = await response.json();
-
-            if (response.ok) {
-                // Success message will be handled by WebSocket
-                // Just reload status to update dependency info
-                await this.loadStatus();
-            } else {
-                this.hideDownloadProgressModal();
-                throw new Error(result.detail || 'Installation failed');
-            }
-
-        } catch (error) {
-            this.hideDownloadProgressModal();
-            this.showToast(`Installation failed: ${error.message}`, 'error');
-        } finally {
-            button.innerHTML = originalText;
-            button.disabled = false;
-        }
-    }
 
     async loadTranscriptionHistory() {
         try {

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Dict, Optional, Any
 import datetime
 import gc
-
+from packaging import version
 import torch
 import whisper
 from pydub import AudioSegment
@@ -38,8 +38,162 @@ from pydantic import BaseModel
 import asyncio
 from typing import Set, Dict
 
-NVIDIA_TRANSFORMERS_VERSION = "4.53.3"
-VOXTRAL_TRANSFORMERS_VERSION = "4.56.0"
+UNIFIED_TRANSFORMERS_VERSION = "4.57.0"
+
+
+def _clear_module_cache_and_refresh(modules_to_clear=None):
+    """Clear module cache and refresh imports after installation."""
+    import importlib
+
+    if modules_to_clear is None:
+        modules_to_clear = ["transformers"]
+
+    # Remove specified modules from cache if they exist
+    modules_to_remove = [
+        name
+        for name in sys.modules.keys()
+        if any(name.startswith(prefix) for prefix in modules_to_clear)
+    ]
+    for module_name in modules_to_remove:
+        del sys.modules[module_name]
+
+    # Invalidate import caches
+    importlib.invalidate_caches()
+    print(f"Cleared module cache for: {', '.join(modules_to_clear)}")
+
+
+def ensure_transformers_version():
+    """Ensure transformers and tokenizers are at compatible versions before startup."""
+    try:
+        import transformers
+        current_version = transformers.__version__
+
+        if version.parse(current_version) >= version.parse(UNIFIED_TRANSFORMERS_VERSION):
+            print(
+                f"✓ Transformers version {current_version} meets requirement (>= {UNIFIED_TRANSFORMERS_VERSION})"
+            )
+            return current_version
+        else:
+            print(
+                f"⚠ Transformers version {current_version} is below required {UNIFIED_TRANSFORMERS_VERSION}"
+            )
+            print("Upgrading transformers and compatible tokenizers...")
+            
+            # Upgrade transformers
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        f"transformers=={UNIFIED_TRANSFORMERS_VERSION}",
+                        "tokenizers>=0.22,<0.23",
+                        "--upgrade",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                print("✓ Transformers and tokenizers upgrade completed")
+                print("Refreshing module cache...")
+                
+                # Clear module cache and refresh
+                _clear_module_cache_and_refresh(["transformers", "tokenizers"])
+                
+                # Re-import and verify
+                import transformers
+                new_version = transformers.__version__
+                if version.parse(new_version) >= version.parse(UNIFIED_TRANSFORMERS_VERSION):
+                    print(f"✓ Transformers successfully upgraded to {new_version}")
+                    return new_version
+                else:
+                    print(f"✗ Upgrade failed: still at version {new_version}")
+                    return None
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"✗ Failed to upgrade transformers: {e}")
+                print(f"stdout: {e.stdout}")
+                print(f"stderr: {e.stderr}")
+                return None
+                
+    except ImportError as e:
+        # Handle tokenizers compatibility error specifically
+        if "tokenizers" in str(e):
+            print("⚠ Tokenizers compatibility issue detected, fixing...")
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        f"transformers=={UNIFIED_TRANSFORMERS_VERSION}",
+                        "tokenizers>=0.22,<0.23",
+                        "--upgrade",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                print("Transformers and tokenizers compatibility fixed")
+                
+                # Clear module cache and refresh
+                _clear_module_cache_and_refresh(["transformers", "tokenizers"])
+                
+                # Import and verify
+                import transformers
+                new_version = transformers.__version__
+                print(f"Transformers installed at version {new_version}")
+                return new_version
+                
+            except subprocess.CalledProcessError as e:
+                print(f"x Failed to fix tokenizers compatibility: {e}")
+                return None
+        else:
+            print("Transformers not installed, installing...")
+        
+        try:
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    f"transformers=={UNIFIED_TRANSFORMERS_VERSION}",
+                    "tokenizers>=0.22,<0.23",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            print("✓ Transformers and tokenizers installation completed")
+            
+            # Import and verify
+            import transformers
+            new_version = transformers.__version__
+            print(f"✓ Transformers installed at version {new_version}")
+            return new_version
+            
+        except subprocess.CalledProcessError as e:
+            print(f"x Failed to install transformers: {e}")
+            return Non
+
+
+
+# Ensure correct transformers version before proceeding
+print("Checking transformers version...")
+current_version = ensure_transformers_version()
+
+if current_version is None:
+    print(
+        "✗ Failed to ensure correct transformers version. Application may not work correctly."
+    )
+    print("Please manually install transformers >= 4.57.0")
+else:
+    print(f"✓ Using transformers version: {current_version}")
+
+
 # Initialize FastAPI app
 app = FastAPI(
     title="VoxScribe API",
@@ -207,53 +361,6 @@ class WebSocketManager:
             }
         )
 
-    async def send_dependency_progress(
-        self,
-        dependency: str,
-        progress: float,
-        status: str,
-        message: str = "",
-        engine: str = None,
-        model_id: str = None,
-    ):
-        """Send dependency installation progress update."""
-        logger.info(
-            f"Sending dependency progress: {dependency} - {progress}% - {status} - {message}"
-        )
-        await self.send_to_all(
-            {
-                "type": "dependency_progress",
-                "dependency": dependency,
-                "progress": progress,
-                "status": status,
-                "message": message,
-                "engine": engine,
-                "model_id": model_id,
-                "timestamp": datetime.datetime.now().isoformat(),
-            }
-        )
-
-    async def send_dependency_complete(
-        self,
-        dependency: str,
-        success: bool,
-        error: str = None,
-        engine: str = None,
-        model_id: str = None,
-    ):
-        """Send dependency installation completion notification."""
-        await self.send_to_all(
-            {
-                "type": "dependency_complete",
-                "dependency": dependency,
-                "success": success,
-                "error": error,
-                "engine": engine,
-                "model_id": model_id,
-                "timestamp": datetime.datetime.now().isoformat(),
-            }
-        )
-
     def is_downloading(self, engine: str, model_id: str) -> bool:
         """Check if a model is currently being downloaded."""
         task_key = f"{engine}:{model_id}"
@@ -308,29 +415,15 @@ class WebSocketManager:
                 engine, model_id, 20, "downloading", "Downloading model files..."
             )
 
-            # Check if dependencies need to be installed first
-            dependency_needed = None
+            # Check if dependencies are available
             if engine == "voxtral" and not _check_voxtral_support():
-                dependency_needed = "voxtral"
-            elif engine == "nvidia" and not _check_nemo_support():
-                dependency_needed = "nvidia"
-
-            if dependency_needed:
-                await self.send_download_progress(
-                    engine,
-                    model_id,
-                    10,
-                    "preparing",
-                    f"Installing {dependency_needed} dependencies...",
+                raise Exception(
+                    f"Voxtral requires transformers {UNIFIED_TRANSFORMERS_VERSION}+"
                 )
-
-                try:
-                    await install_deps_with_websocket(
-                        dependency_needed, engine, model_id
-                    )
-                except Exception as e:
-                    logger.error(f"Dependency installation failed: {e}")
-                    raise
+            elif engine == "nvidia" and not _check_nemo_support():
+                raise Exception(
+                    f"NeMo toolkit requires transformers {UNIFIED_TRANSFORMERS_VERSION}+"
+                )
 
             # Create a wrapper function that provides progress updates
             def download_with_progress():
@@ -873,38 +966,17 @@ class ModelInfo(BaseModel):
     cached: bool
 
 
-def _clear_module_cache_and_refresh(modules_to_clear=None):
-    """Clear module cache and refresh imports after installation."""
-    import importlib
-
-    if modules_to_clear is None:
-        modules_to_clear = ["transformers"]
-
-    # Remove specified modules from cache if they exist
-    modules_to_remove = [
-        name
-        for name in sys.modules.keys()
-        if any(name.startswith(prefix) for prefix in modules_to_clear)
-    ]
-    for module_name in modules_to_remove:
-        del sys.modules[module_name]
-
-    # Invalidate import caches
-    importlib.invalidate_caches()
-    logger.info(f"Cleared module cache for: {', '.join(modules_to_clear)}")
-
-
 def _check_voxtral_support():
     """Internal function to check Voxtral support."""
     try:
         import transformers
 
         version = transformers.__version__
-        supported = version >= VOXTRAL_TRANSFORMERS_VERSION
+        supported = version >= UNIFIED_TRANSFORMERS_VERSION
 
         if not supported:
             logger.warning(
-                f"Voxtral not supported: transformers version {version} < {VOXTRAL_TRANSFORMERS_VERSION}"
+                f"Voxtral not supported: transformers version {version} < {UNIFIED_TRANSFORMERS_VERSION}"
             )
         else:
             logger.info(f"Voxtral supported: transformers version {version}")
@@ -921,21 +993,15 @@ def _check_voxtral_support():
 def _check_nemo_support():
     """Internal function to check NeMo support."""
     try:
-        # Initialize supported variable
-        supported = False
-
         # Check transformers version first
         import transformers
 
         version = transformers.__version__
-        if version in NVIDIA_TRANSFORMERS_VERSION:
-            supported = True
+        supported = version >= UNIFIED_TRANSFORMERS_VERSION
 
-        if supported:
-            logger.info(f"NeMo toolkit supported: Transformers=={version} loaded")
-        else:
-            logger.error(
-                f"NeMo toolkit not supported: Transformers=={version} loaded, expected {NVIDIA_TRANSFORMERS_VERSION}"
+        if not supported:
+            logger.warning(
+                f"NeMo not supported: transformers version {version} < {UNIFIED_TRANSFORMERS_VERSION}"
             )
             return False
 
@@ -943,7 +1009,7 @@ def _check_nemo_support():
         import nemo.collections.asr as nemo_asr
         from nemo.collections.speechlm2.models import SALM
 
-        logger.info("NeMo toolkit detected and supported")
+        logger.info(f"NeMo toolkit supported: transformers version {version}")
         return True
     except ImportError as e:
         logger.warning(f"NeMo not supported: NeMo toolkit not installed - {e}")
@@ -1229,179 +1295,56 @@ def load_model(engine, model_id):
 
         elif engine == "voxtral":
             if not _check_voxtral_support():
-                try:
-                    # Fire-and-forget WebSocket notification
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.create_task(
-                                websocket_manager.send_dependency_progress(
-                                    engine,
-                                    0,
-                                    "preparing",
-                                    "Preparing environment for dependency installation...",
-                                    engine,
-                                    model_id,
-                                )
-                            )
-                    except:
-                        pass  # Ignore WebSocket errors in sync context
-                    install_deps(engine)
-                except Exception as e:
-                    error_msg = f"Voxtral requires transformers {VOXTRAL_TRANSFORMERS_VERSION}+. {e}"
-                    transcription_logger.log_dependency_error(
-                        engine, model_id, "transformers", error_msg
-                    )
-                    raise Exception(error_msg)
-
-            if _check_voxtral_support():
-                from transformers import VoxtralForConditionalGeneration, AutoProcessor
-
-                # Fire-and-forget WebSocket notification
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(
-                            websocket_manager.send_dependency_progress(
-                                engine,
-                                0,
-                                "installing",
-                                f"Installing transformers version {VOXTRAL_TRANSFORMERS_VERSION}...",
-                                engine,
-                                model_id,
-                            )
-                        )
-                except:
-                    pass  # Ignore WebSocket errors in sync context
-                processor = AutoProcessor.from_pretrained(
-                    model_id, cache_dir=str(cache_dir)
-                )
-                # Fire-and-forget WebSocket notification
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(
-                            websocket_manager.send_dependency_progress(
-                                engine,
-                                0,
-                                "loading",
-                                f"Loading Voxtral {model_id}...",
-                                engine,
-                                model_id,
-                            )
-                        )
-                except:
-                    pass  # Ignore WebSocket errors in sync context
-                model = VoxtralForConditionalGeneration.from_pretrained(
-                    model_id,
-                    cache_dir=str(cache_dir),
-                    torch_dtype=torch.bfloat16,
-                    device_map="auto",
-                )
-                result = (model, processor)
-            else:
-                error_msg = f"Voxtral transformers library not loaded successfully."
+                error_msg = f"Voxtral requires transformers {UNIFIED_TRANSFORMERS_VERSION}+. Please install the correct transformers version."
                 transcription_logger.log_dependency_error(
                     engine, model_id, "transformers", error_msg
                 )
                 raise Exception(error_msg)
+
+            from transformers import VoxtralForConditionalGeneration, AutoProcessor
+
+            processor = AutoProcessor.from_pretrained(
+                model_id, cache_dir=str(cache_dir)
+            )
+            model = VoxtralForConditionalGeneration.from_pretrained(
+                model_id,
+                cache_dir=str(cache_dir),
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
+            )
+            result = (model, processor)
 
         elif engine == "nvidia":
             if not _check_nemo_support():
-                try:
-                    logger.info("Nemo toolkit needs transformers<4.52.0 and >=4.51.0")
-                    # Fire-and-forget WebSocket notification
-                    try:
-                        loop = asyncio.get_event_loop()
-                        if loop.is_running():
-                            loop.create_task(
-                                websocket_manager.send_dependency_progress(
-                                    engine,
-                                    0,
-                                    "preparing",
-                                    "Preparing environment for dependency installation...",
-                                    engine,
-                                    model_id,
-                                )
-                            )
-                    except:
-                        pass  # Ignore WebSocket errors in sync context
-                    install_deps(engine)
-                except Exception as e:
-                    error_msg = "NeMo toolkit required"
-                    transcription_logger.log_dependency_error(
-                        engine, model_id, "nemo", error_msg
-                    )
-                    raise Exception(error_msg)
-
-            if _check_nemo_support():
-                import nemo.collections.asr as nemo_asr
-                from nemo.collections.speechlm2.models import SALM
-
-                # Fire-and-forget WebSocket notification
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(
-                            websocket_manager.send_dependency_progress(
-                                engine,
-                                0,
-                                "installing",
-                                f"Installing transformers version {NVIDIA_TRANSFORMERS_VERSION}...",
-                                engine,
-                                model_id,
-                            )
-                        )
-                except:
-                    pass  # Ignore WebSocket errors in sync context
-
-                # Set multiple cache environment variables to ensure models are stored in our cache
-                os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
-                os.environ["HF_HOME"] = str(cache_dir / "huggingface")
-                os.environ["HUGGINGFACE_HUB_CACHE"] = str(
-                    cache_dir / "huggingface" / "hub"
-                )
-                os.environ["TRANSFORMERS_CACHE"] = str(
-                    cache_dir / "huggingface" / "transformers"
-                )
-
-                # Ensure the huggingface cache directory exists
-                (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
-                (cache_dir / "huggingface" / "transformers").mkdir(
-                    parents=True, exist_ok=True
-                )
-
-                # Fire-and-forget WebSocket notification
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        loop.create_task(
-                            websocket_manager.send_dependency_progress(
-                                engine,
-                                0,
-                                "loading",
-                                f"Loading Nvidia {model_id}...",
-                                engine,
-                                model_id,
-                            )
-                        )
-                except:
-                    pass  # Ignore WebSocket errors in sync context
-
-                if "parakeet" in model_id:
-                    model = nemo_asr.models.ASRModel.from_pretrained(
-                        model_name=model_id
-                    )
-                elif "canary" in model_id:
-                    model = SALM.from_pretrained(model_id)
-
-                result = model
-            else:
-                error_msg = f"Nemo transformers library not loaded successfully."
+                error_msg = f"NeMo toolkit requires transformers {UNIFIED_TRANSFORMERS_VERSION}+. Please install the correct transformers version."
                 transcription_logger.log_dependency_error(
-                    engine, model_id, "transformers", error_msg
+                    engine, model_id, "nemo", error_msg
                 )
                 raise Exception(error_msg)
+
+            import nemo.collections.asr as nemo_asr
+            from nemo.collections.speechlm2.models import SALM
+
+            # Set multiple cache environment variables to ensure models are stored in our cache
+            os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
+            os.environ["HF_HOME"] = str(cache_dir / "huggingface")
+            os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir / "huggingface" / "hub")
+            os.environ["TRANSFORMERS_CACHE"] = str(
+                cache_dir / "huggingface" / "transformers"
+            )
+
+            # Ensure the huggingface cache directory exists
+            (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
+            (cache_dir / "huggingface" / "transformers").mkdir(
+                parents=True, exist_ok=True
+            )
+
+            if "parakeet" in model_id:
+                model = nemo_asr.models.ASRModel.from_pretrained(model_name=model_id)
+            elif "canary" in model_id:
+                model = SALM.from_pretrained(model_id)
+
+            result = model
 
         else:
             raise Exception(f"Unknown engine: {engine}")
@@ -1755,6 +1698,7 @@ async def get_status():
             "voxtral_supported": _check_voxtral_support(),
             "nemo_supported": _check_nemo_support(),
             "transformers_version": get_transformers_version(),
+            "required_transformers_version": UNIFIED_TRANSFORMERS_VERSION,
         },
     }
 
@@ -2081,26 +2025,6 @@ async def compare_models(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-class DependencyRequest(BaseModel):
-    dependency: str
-
-    class Config:
-        schema_extra = {"example": {"dependency": "voxtral"}}
-
-
-@app.post("/api/install-dependency")
-async def install_dependency(request: DependencyRequest):
-    """Install missing dependencies with WebSocket progress updates."""
-
-    dependency = request.dependency
-    print(f"Installing dependency: {dependency}")  # Debug log
-
-    try:
-        return install_deps(dependency)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Installation failed {e}")
-
-
 @app.delete("/api/models/{engine}/{model_id}")
 async def delete_model_cache(engine: str, model_id: str):
     """Delete a cached model."""
@@ -2146,266 +2070,6 @@ async def delete_model_cache(engine: str, model_id: str):
         # Log failed deletion
         transcription_logger.log_model_delete(engine, model_id, False, error_msg)
         logger.error(f"Error deleting model cache {engine}/{model_id}: {e}")
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
-async def install_deps_with_websocket(
-    dependency: str, engine: str = None, model_id: str = None
-):
-    """Install dependencies with WebSocket progress updates."""
-    # Validate dependency type first
-    if dependency not in ["voxtral", "nvidia"]:
-        error_msg = f"Unknown dependency: {dependency}. Supported: 'voxtral', 'nvidia'"
-        transcription_logger.log_dependency_install_complete(
-            dependency, False, error_msg
-        )
-        await websocket_manager.send_dependency_complete(
-            dependency, False, error_msg, engine, model_id
-        )
-        raise HTTPException(status_code=400, detail=error_msg)
-
-    # Log installation start
-    transcription_logger.log_dependency_install_start(dependency)
-    install_start_time = time.time()
-
-    try:
-        await websocket_manager.send_dependency_progress(
-            dependency,
-            0,
-            "preparing",
-            "Preparing environment for dependency installation...",
-            engine,
-            model_id,
-        )
-
-        if dependency == "voxtral":
-            await websocket_manager.send_dependency_progress(
-                dependency,
-                20,
-                "installing",
-                f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}+...",
-                engine,
-                model_id,
-            )
-
-            logger.info(f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}")
-            command = [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                f"transformers>={VOXTRAL_TRANSFORMERS_VERSION}",
-            ]
-
-            # Run pip install in executor to avoid blocking
-            process = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    command, capture_output=True, text=True, check=True
-                ),
-            )
-
-            await websocket_manager.send_dependency_progress(
-                dependency,
-                80,
-                "configuring",
-                "Refreshing module cache...",
-                engine,
-                model_id,
-            )
-
-            # Clear cache and refresh imports
-            _clear_module_cache_and_refresh(["transformers"])
-
-            message = (
-                f"Transformers {VOXTRAL_TRANSFORMERS_VERSION} installed successfully"
-            )
-
-        elif dependency == "nvidia":
-            await websocket_manager.send_dependency_progress(
-                dependency,
-                20,
-                "installing",
-                f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}...",
-                engine,
-                model_id,
-            )
-
-            logger.info(f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}")
-            command = [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                f"transformers=={NVIDIA_TRANSFORMERS_VERSION}",
-            ]
-
-            # Run pip install in executor to avoid blocking
-            process = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    command, capture_output=True, text=True, check=True
-                ),
-            )
-
-            await websocket_manager.send_dependency_progress(
-                dependency,
-                80,
-                "configuring",
-                "Refreshing module cache...",
-                engine,
-                model_id,
-            )
-
-            # Clear cache and refresh imports
-            _clear_module_cache_and_refresh(["transformers"])
-
-            message = (
-                f"Transformers {NVIDIA_TRANSFORMERS_VERSION} installed successfully"
-            )
-
-        await websocket_manager.send_dependency_progress(
-            dependency, 100, "complete", message, engine, model_id
-        )
-
-        install_time = time.time() - install_start_time
-        transcription_logger.log_dependency_install_complete(
-            dependency, True, None, install_time
-        )
-
-        await websocket_manager.send_dependency_complete(
-            dependency, True, None, engine, model_id
-        )
-
-        return {"success": True, "message": message}
-
-    except subprocess.CalledProcessError as e:
-        install_time = time.time() - install_start_time
-        error_msg = f"Installation failed: {e.stderr}"
-        transcription_logger.log_dependency_install_complete(
-            dependency, False, error_msg, install_time
-        )
-
-        await websocket_manager.send_dependency_progress(
-            dependency,
-            0,
-            "error",
-            f"Installation failed: {error_msg}",
-            engine,
-            model_id,
-        )
-        await websocket_manager.send_dependency_complete(
-            dependency, False, error_msg, engine, model_id
-        )
-
-        raise HTTPException(status_code=500, detail=error_msg)
-    except Exception as e:
-        install_time = time.time() - install_start_time
-        error_msg = f"Unexpected error: {str(e)}"
-        transcription_logger.log_dependency_install_complete(
-            dependency, False, error_msg, install_time
-        )
-
-        await websocket_manager.send_dependency_progress(
-            dependency, 0, "error", error_msg, engine, model_id
-        )
-        await websocket_manager.send_dependency_complete(
-            dependency, False, error_msg, engine, model_id
-        )
-
-        raise HTTPException(status_code=500, detail=error_msg)
-
-
-def install_deps(dependency: str):
-    """Synchronous dependency installation (fallback)."""
-    # Validate dependency type first
-    if dependency not in ["voxtral", "nvidia"]:
-        error_msg = f"Unknown dependency: {dependency}. Supported: 'voxtral', 'nvidia'"
-        transcription_logger.log_dependency_install_complete(
-            dependency, False, error_msg
-        )
-        raise HTTPException(status_code=400, detail=error_msg)
-
-    # Log installation start
-    transcription_logger.log_dependency_install_start(dependency)
-    install_start_time = time.time()
-
-    try:
-        if dependency == "voxtral":
-            logger.info(f"Installing transformers {VOXTRAL_TRANSFORMERS_VERSION}")
-            command = [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                f"transformers>={VOXTRAL_TRANSFORMERS_VERSION}",
-            ]
-
-            subprocess.run(command, capture_output=True, text=True, check=True)
-
-            # Clear cache and refresh imports
-            _clear_module_cache_and_refresh(["transformers"])
-
-            message = (
-                f"Transformers {VOXTRAL_TRANSFORMERS_VERSION} installed successfully"
-            )
-
-        elif dependency == "nvidia":
-            logger.info(f"Installing transformers {NVIDIA_TRANSFORMERS_VERSION}")
-            command = [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                f"transformers=={NVIDIA_TRANSFORMERS_VERSION}",
-            ]
-            subprocess.run(command, capture_output=True, text=True, check=True)
-
-            # Clear cache and refresh imports
-            _clear_module_cache_and_refresh(["transformers"])
-
-            message = (
-                f"Transformers {NVIDIA_TRANSFORMERS_VERSION} installed successfully"
-            )
-
-        install_time = time.time() - install_start_time
-        transcription_logger.log_dependency_install_complete(
-            dependency, True, None, install_time
-        )
-
-        # Send WebSocket completion message for standalone dependency installs
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(
-                    websocket_manager.send_dependency_complete(
-                        dependency, True, None, None, None
-                    )
-                )
-        except:
-            pass  # Ignore WebSocket errors in sync context
-
-        return {"success": True, "message": message}
-
-    except subprocess.CalledProcessError as e:
-        install_time = time.time() - install_start_time
-        error_msg = f"Installation failed: {e.stderr}"
-        transcription_logger.log_dependency_install_complete(
-            dependency, False, error_msg, install_time
-        )
-        
-        # Send WebSocket completion message for standalone dependency installs
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(
-                    websocket_manager.send_dependency_complete(
-                        dependency, False, error_msg, None, None
-                    )
-                )
-        except:
-            pass  # Ignore WebSocket errors in sync context
-            
         raise HTTPException(status_code=500, detail=error_msg)
 
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-VoxScribe startup script
+SpeechHub startup script
 """
 
 import uvicorn
@@ -25,7 +25,7 @@ if __name__ == "__main__":
             print(f"  - {f}")
         exit(1)
     
-    print("🎤 Starting VoxScribe server...")
+    print("🎤 Starting SpeechHub server...")
     print("📁 Serving static files from: public/")
     print("🌐 API available at: http://localhost:8000/api/")
     print("🎯 Web interface at: http://localhost:8000/")
