@@ -926,6 +926,14 @@ class VoxScribe {
             `;
 
             compareModelsContainer.appendChild(modelCard);
+            
+            // Add event listener to the checkbox
+            const checkbox = modelCard.querySelector('input[type="checkbox"]');
+            if (checkbox && !disabled) {
+                checkbox.addEventListener('change', () => {
+                    this.updateUI();
+                });
+            }
         });
 
         this.updateUI();
