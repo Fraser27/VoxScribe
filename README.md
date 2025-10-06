@@ -1,6 +1,6 @@
-# VoxScribe - FastAPI Version
+# VoxScribe
 
-A clean separation of frontend and backend for the Universal Speech-to-Text Platform.
+VoxScribe: A platform to test Opensource Speech-to-Text models
 
 ## Architecture
 
