@@ -63,7 +63,7 @@ def _clear_module_cache_and_refresh(modules_to_clear=None):
 
 
 def ensure_transformers_version():
-    """Ensure transformers is at the required version before startup."""
+    """Ensure transformers and tokenizers are at compatible versions before startup."""
     try:
         import transformers
         current_version = transformers.__version__
@@ -77,7 +77,7 @@ def ensure_transformers_version():
             print(
                 f"⚠ Transformers version {current_version} is below required {UNIFIED_TRANSFORMERS_VERSION}"
             )
-            print("Upgrading transformers...")
+            print("Upgrading transformers and compatible tokenizers...")
             
             # Upgrade transformers
             try:
@@ -88,17 +88,18 @@ def ensure_transformers_version():
                         "pip",
                         "install",
                         f"transformers>={UNIFIED_TRANSFORMERS_VERSION}",
+                        "tokenizers>=0.21,<0.22",
                         "--upgrade",
                     ],
                     capture_output=True,
                     text=True,
                     check=True,
                 )
-                print("✓ Transformers upgrade completed")
+                print("✓ Transformers and tokenizers upgrade completed")
                 print("Refreshing module cache...")
                 
                 # Clear module cache and refresh
-                _clear_module_cache_and_refresh(["transformers"])
+                _clear_module_cache_and_refresh(["transformers", "tokenizers"])
                 
                 # Re-import and verify
                 import transformers
@@ -116,8 +117,41 @@ def ensure_transformers_version():
                 print(f"stderr: {e.stderr}")
                 return None
                 
-    except ImportError:
-        print("⚠ Transformers not installed, installing...")
+    except ImportError as e:
+        # Handle tokenizers compatibility error specifically
+        if "tokenizers" in str(e):
+            print("⚠ Tokenizers compatibility issue detected, fixing...")
+            try:
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-m",
+                        "pip",
+                        "install",
+                        f"transformers=={UNIFIED_TRANSFORMERS_VERSION}",
+                        "tokenizers>=0.21,<0.22",
+                        "--upgrade",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                print("Transformers and tokenizers compatibility fixed")
+                
+                # Clear module cache and refresh
+                _clear_module_cache_and_refresh(["transformers", "tokenizers"])
+                
+                # Import and verify
+                import transformers
+                new_version = transformers.__version__
+                print(f"Transformers installed at version {new_version}")
+                return new_version
+                
+            except subprocess.CalledProcessError as e:
+                print(f"x Failed to fix tokenizers compatibility: {e}")
+                return None
+        else:
+            print("Transformers not installed, installing...")
         
         try:
             result = subprocess.run(
@@ -126,13 +160,14 @@ def ensure_transformers_version():
                     "-m",
                     "pip",
                     "install",
-                    f"transformers>={UNIFIED_TRANSFORMERS_VERSION}",
+                    f"transformers=={UNIFIED_TRANSFORMERS_VERSION}",
+                    "tokenizers>=0.21,<0.22",
                 ],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            print("✓ Transformers installation completed")
+            print("✓ Transformers and tokenizers installation completed")
             
             # Import and verify
             import transformers
@@ -141,8 +176,8 @@ def ensure_transformers_version():
             return new_version
             
         except subprocess.CalledProcessError as e:
-            print(f"✗ Failed to install transformers: {e}")
-            return None
+            print(f"x Failed to install transformers: {e}")
+            return Non
 
 
 
