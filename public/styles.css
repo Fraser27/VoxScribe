@@ -1672,3 +1672,139 @@ Modal Styles */
         padding: 0.25rem;
     }
 }
+
+/* RTFx
+ Explanation Styles */
+.rtfx-explanation {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+}
+
+.rtfx-definition {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin-bottom: 1rem;
+    line-height: 1.5;
+}
+
+.rtfx-examples {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.rtfx-example {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+.rtfx-value {
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    min-width: 3rem;
+    text-align: center;
+    color: white;
+}
+
+.rtfx-value.excellent {
+    background: var(--success-color);
+}
+
+.rtfx-value.good {
+    background: var(--info-color);
+}
+
+.rtfx-value.slow {
+    background: var(--warning-color);
+}
+
+.rtfx-desc {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.rtfx-desc small {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
+.rtfx-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+    border-left: 3px solid var(--info-color);
+}
+
+.rtfx-note i {
+    color: var(--info-color);
+}
+
+* Collapsible Sidebar Styles */ .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    padding: 0.25rem;
+    border-radius: 4px;
+}
+
+.sidebar-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.sidebar-header span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.collapse-icon {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+}
+
+.sidebar-header.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.sidebar-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 1000px;
+    opacity: 1;
+}
+
+.sidebar-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Ensure proper spacing when collapsed */
+.sidebar-section .sidebar-content {
+    margin-top: 1rem;
+}
+
+.sidebar-section .sidebar-content.collapsed {
+    margin-top: 0;
+}
