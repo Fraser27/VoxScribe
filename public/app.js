@@ -112,7 +112,9 @@ class VoxScribe {
             // If this was a pending download for transcription, proceed
             if (this.pendingDownload &&
                 this.pendingDownload.engine === engine &&
-                this.pendingDownload.model_id === model_id) {
+                this.pendingDownload.model_id === model_id &&
+                this.selectedFile
+            ) {
 
                 setTimeout(() => {
                     this.startTranscription();
@@ -434,9 +436,10 @@ class VoxScribe {
     }
 
     async startTranscription() {
+        const transcribeBtn = document.getElementById('transcribeBtn');
         const engine = document.getElementById('engineSelect').value;
         const modelId = document.getElementById('modelSelect').value;
-
+        transcribeBtn.disabled = true
         this.showProgress('Transcribing audio...');
 
         const formData = new FormData();
@@ -467,6 +470,8 @@ class VoxScribe {
             this.hideProgress();
             this.showToast(`Transcription failed: ${error.message}`, 'error');
             console.error('Transcription error:', error);
+        } finally {
+            transcribeBtn.disabled = false
         }
     }
 
@@ -565,7 +570,8 @@ class VoxScribe {
             this.showToast(`The following models need to be downloaded first: ${modelNames}`, 'warning');
             return;
         }
-
+        const compareBtn = document.getElementById('compareBtn');
+        compareBtn.disabled=true
         this.showProgress('Comparing models...');
 
         const formData = new FormData();
@@ -598,6 +604,8 @@ class VoxScribe {
             this.hideProgress();
             this.showToast(`Comparison failed: ${error.message}`, 'error');
             console.error('Comparison error:', error);
+        } finally {
+            compareBtn.disabled=false
         }
     }
 
