@@ -1754,3 +1754,57 @@ Modal Styles */
 .rtfx-note i {
     color: var(--info-color);
 }
+
+* Collapsible Sidebar Styles */ .sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    padding: 0.25rem;
+    border-radius: 4px;
+}
+
+.sidebar-header:hover {
+    background: var(--bg-tertiary);
+}
+
+.sidebar-header span {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.collapse-icon {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    transition: transform 0.3s ease;
+}
+
+.sidebar-header.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.sidebar-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    max-height: 1000px;
+    opacity: 1;
+}
+
+.sidebar-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+/* Ensure proper spacing when collapsed */
+.sidebar-section .sidebar-content {
+    margin-top: 1rem;
+}
+
+.sidebar-section .sidebar-content.collapsed {
+    margin-top: 0;
+}
