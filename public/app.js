@@ -218,6 +218,9 @@ class VoxScribe {
     }
 
     setupEventListeners() {
+        // Sidebar collapsible sections
+        this.setupSidebarCollapse();
+
         // Theme toggle
         document.getElementById('themeToggle').addEventListener('click', () => {
             this.toggleTheme();
@@ -1548,6 +1551,42 @@ class VoxScribe {
     updateThemeIcon(theme) {
         const icon = document.querySelector('#themeToggle i');
         icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    setupSidebarCollapse() {
+        // Get all sidebar headers
+        const headers = document.querySelectorAll('.sidebar-header');
+        
+        // Load saved collapse states from localStorage
+        const savedStates = JSON.parse(localStorage.getItem('voxscribe-sidebar-states') || '{}');
+        
+        headers.forEach(header => {
+            const sectionId = header.getAttribute('data-section');
+            const content = document.getElementById(`${sectionId}-content`);
+            
+            if (!content) return;
+            
+            // Apply saved state or default to expanded
+            const isCollapsed = savedStates[sectionId] || false;
+            if (isCollapsed) {
+                header.classList.add('collapsed');
+                content.classList.add('collapsed');
+            }
+            
+            // Add click event listener
+            header.addEventListener('click', () => {
+                const isCurrentlyCollapsed = header.classList.contains('collapsed');
+                
+                // Toggle collapsed state
+                header.classList.toggle('collapsed');
+                content.classList.toggle('collapsed');
+                
+                // Save state to localStorage
+                const newStates = JSON.parse(localStorage.getItem('voxscribe-sidebar-states') || '{}');
+                newStates[sectionId] = !isCurrentlyCollapsed;
+                localStorage.setItem('voxscribe-sidebar-states', JSON.stringify(newStates));
+            });
+        });
     }
 }
 
