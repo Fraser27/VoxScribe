@@ -140,11 +140,12 @@ class WebSocketManager:
                 engine, model_id, 10, "starting", "Initializing download..."
             )
 
-            # Import here to avoid circular imports
-            import backend
+            # Get global manager instances
+            from global_managers import get_model_manager
+            model_manager = get_model_manager()
             
             # Check if model is already cached
-            if backend.model_manager.is_model_cached(engine, model_id):
+            if model_manager.is_model_cached(engine, model_id):
                 logger.info(f"Model {engine}/{model_id} already cached")
                 await self.send_download_progress(
                     engine, model_id, 75, "downloading", f"Loading model {engine}/{model_id} from cache..."
@@ -192,11 +193,12 @@ class WebSocketManager:
                 engine, model_id, 90, "finalizing", "Finalizing download..."
             )
 
-            # Import here to avoid circular imports
-            import backend
+            # Get global manager instances
+            from global_managers import get_model_manager
+            model_manager = get_model_manager()
             
             # Verify model is now cached
-            if backend.model_manager.is_model_cached(engine, model_id):
+            if model_manager.is_model_cached(engine, model_id):
                 logger.info(
                     f"Model {engine}/{model_id} download completed successfully"
                 )

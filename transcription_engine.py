@@ -20,9 +20,10 @@ def transcribe_audio(
 ):
     """Unified transcription method for all STT engines."""
     
-    # Import here to avoid circular imports
-    from transcription_logger import transcription_logger
-    from transcription_manager import transcription_manager
+    # Get global manager instances
+    from global_managers import get_transcription_logger, get_transcription_manager
+    transcription_logger = get_transcription_logger()
+    transcription_manager = get_transcription_manager()
     
     total_start_time = time.time()
 
