@@ -97,6 +97,10 @@ transcription_manager = TranscriptionManager(TRANSCRIPTIONS_DIR)
 model_manager = ModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
 model_manager.scan_existing_models()
 
+# Set the global manager instances for model_loader
+from model_loader import set_managers
+set_managers(model_manager, transcription_logger)
+
 # Pydantic models
 class TranscriptionRequest(BaseModel):
     engine: str
