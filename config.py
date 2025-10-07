@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""
+Configuration constants and settings for VoxScribe
+"""
+
+import os
+import torch
+from pathlib import Path
+
+# Device configuration
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+# Audio format support
+SUPPORTED_FORMATS = ["wav", "mp3", "flac", "m4a", "ogg"]
+
+# Processing limits
+MAX_RECOMMENDED_DURATION = 30 * 60
+
+# Transformers version requirement
+UNIFIED_TRANSFORMERS_VERSION = "4.57.0"
+
+# Directory paths
+BASE_MODELS_DIR = Path(os.getcwd()) / "models"
+TRANSCRIPTIONS_DIR = Path(os.getcwd()) / "transcriptions"
+
+# Ensure directories exist
+BASE_MODELS_DIR.mkdir(exist_ok=True)
+TRANSCRIPTIONS_DIR.mkdir(exist_ok=True)
+
+# Set global cache directories for Hugging Face and NeMo
+os.environ["HF_HOME"] = str(BASE_MODELS_DIR / "huggingface")
+os.environ["HUGGINGFACE_HUB_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "hub")
+os.environ["TRANSFORMERS_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "transformers")
+
+# Model configurations
+MODEL_REGISTRY = {
+    "whisper": {
+        "tiny": {"size": "39MB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "base": {"size": "142MB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "small": {"size": "461MB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "medium": {"size": "1.5GB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "large": {"size": "2.9GB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "large-v2": {"size": "2.9GB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+        "large-v3": {"size": "2.9GB", "cache_dir": BASE_MODELS_DIR / "whisper"},
+    },
+    "voxtral": {
+        "mistralai/Voxtral-Mini-3B-2507": {
+            "size": "6GB",
+            "cache_dir": BASE_MODELS_DIR / "voxtral" / "mini-3b",
+            "display_name": "Voxtral Mini 3B",
+        },
+        "mistralai/Voxtral-Small-24B-2507": {
+            "size": "48GB",
+            "cache_dir": BASE_MODELS_DIR / "voxtral" / "small-24b",
+            "display_name": "Voxtral Small 24B",
+        },
+    },
+    "nvidia": {
+        "nvidia/parakeet-tdt-0.6b-v2": {
+            "size": "2.4GB",
+            "cache_dir": BASE_MODELS_DIR / "nvidia" / "parakeet-tdt-0.6b-v2",
+            "display_name": "Parakeet TDT 0.6B V2",
+        },
+        "nvidia/canary-qwen-2.5b": {
+            "size": "5GB",
+            "cache_dir": BASE_MODELS_DIR / "nvidia" / "canary-qwen-2.5b",
+            "display_name": "Canary-Qwen 2.5B",
+        },
+    },
+}
+
+# Ensure all model directories exist
+for engine_models in MODEL_REGISTRY.values():
+    for model_config in engine_models.values():
+        if isinstance(model_config, dict) and "cache_dir" in model_config:
+            model_config["cache_dir"].mkdir(parents=True, exist_ok=True)
