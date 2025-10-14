@@ -43,6 +43,8 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 └── requirements.txt    # Python dependencies
 ```
 
+[![Watch the video](https://github.com/user-attachments/assets/cf5be7f8-ce30-4f72-8d2e-05904ca48b9e)](https://www.youtube.com/watch?v=mX9L-x2zj6k)
+
 ## Features
 
 ### Backend (FastAPI)
