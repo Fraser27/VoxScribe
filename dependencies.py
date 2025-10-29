@@ -212,6 +212,36 @@ def _check_nemo_support():
             return False
 
 
+def _check_granite_support():
+    """Internal function to check Granite Speech support."""
+    try:
+        # Check transformers version first
+        import transformers
+
+        version_str = transformers.__version__
+        supported = version_str >= UNIFIED_TRANSFORMERS_VERSION
+
+        if not supported:
+            logger.warning(
+                f"Granite not supported: transformers version {version_str} < {UNIFIED_TRANSFORMERS_VERSION}"
+            )
+            return False
+
+        # Try to import required components
+        from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
+        import torch
+        import torchaudio
+
+        logger.info(f"Granite Speech supported: transformers version {version_str}")
+        return True
+    except ImportError as e:
+        logger.warning(f"Granite not supported: required dependencies not installed - {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error checking Granite support: {e}")
+        return False
+
+
 def get_transformers_version():
     """Get transformers version if available."""
     try:
