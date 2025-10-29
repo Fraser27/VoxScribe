@@ -19,12 +19,13 @@ def transcribe_audio(
     engine, audio_path, model_id, filename=None, file_size=None, save_to_history=True
 ):
     """Unified transcription method for all STT engines."""
-    
+
     # Get global manager instances
     from global_managers import get_transcription_logger, get_transcription_manager
+
     transcription_logger = get_transcription_logger()
     transcription_manager = get_transcription_manager()
-    
+
     total_start_time = time.time()
 
     # Extract filename if not provided
@@ -128,6 +129,71 @@ def transcribe_audio(
                         f"{duration_sec:.2f}",
                         f"{duration_sec:.2f}",
                         transcription_text.strip(),
+                    ]
+                )
+
+            elif engine == "granite":
+                model_data = model_result
+                model = model_data["model"]
+                processor = model_data["processor"]
+                tokenizer = model_data["tokenizer"]
+
+                # Load and validate audio
+                import torchaudio
+
+                wav, sr = torchaudio.load(processed_path, normalize=True)
+
+                # Ensure mono, 16kHz audio
+                if wav.shape[0] > 1:
+                    wav = wav.mean(dim=0, keepdim=True)
+                if sr != 16000:
+                    import torchaudio.transforms as T
+
+                    resampler = T.Resample(sr, 16000)
+                    wav = resampler(wav)
+
+                # Create chat prompt for transcription
+                system_prompt = "Knowledge Cutoff Date: April 2024.\nToday's Date: April 9, 2025.\nYou are Granite, developed by IBM. You are a helpful AI assistant"
+                user_prompt = (
+                    "<|audio|>can you transcribe the speech into a written format?"
+                )
+                chat = [
+                    dict(role="system", content=system_prompt),
+                    dict(role="user", content=user_prompt),
+                ]
+                prompt = tokenizer.apply_chat_template(
+                    chat, tokenize=False, add_generation_prompt=True
+                )
+
+                # Process with model
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                model_inputs = processor(
+                    prompt, wav, device=device, return_tensors="pt"
+                ).to(device)
+                model_outputs = model.generate(
+                    **model_inputs, max_new_tokens=600, do_sample=False, num_beams=1
+                )
+
+                # Extract only the new tokens (response)
+                num_input_tokens = model_inputs["input_ids"].shape[-1]
+                new_tokens = torch.unsqueeze(model_outputs[0, num_input_tokens:], dim=0)
+                output_text = tokenizer.batch_decode(
+                    new_tokens, add_special_tokens=False, skip_special_tokens=True
+                )
+
+                transcription_text = output_text[0].strip()
+
+                if not transcription_text:
+                    raise Exception("Granite transcription failed")
+
+                # Simple CSV format (no detailed timestamps from Granite)
+                csv_data = [["Start (s)", "End (s)", "Duration (s)", "Transcription"]]
+                csv_data.append(
+                    [
+                        "0.00",
+                        f"{duration_sec:.2f}",
+                        f"{duration_sec:.2f}",
+                        transcription_text,
                     ]
                 )
 
