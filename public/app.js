@@ -692,6 +692,7 @@ class VoxScribe {
             // Update dependency status
             this.updateDependencyStatus('voxtral', status.dependencies.voxtral_supported);
             this.updateDependencyStatus('nemo', status.dependencies.nemo_supported);
+            this.updateDependencyStatus('granite', status.dependencies.granite_supported);
 
             const transformersVersion = status.dependencies.transformers_version;
             const dependencyText = transformersVersion ?
@@ -708,7 +709,8 @@ class VoxScribe {
         // Map dependency names to element IDs
         const statusIdMap = {
             'voxtral': 'voxtralStatus',
-            'nemo': 'nemoStatus'
+            'nemo': 'nemoStatus',
+            'granite': 'graniteStatus'
         };
 
         const statusId = statusIdMap[dependency];
