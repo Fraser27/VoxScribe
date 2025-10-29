@@ -40,6 +40,7 @@ from dependencies import (
     ensure_transformers_version,
     _check_voxtral_support,
     _check_nemo_support,
+    _check_granite_support,
     get_transformers_version,
     UNIFIED_TRANSFORMERS_VERSION,
 )
@@ -146,6 +147,7 @@ async def get_status():
         "dependencies": {
             "voxtral_supported": _check_voxtral_support(),
             "nemo_supported": _check_nemo_support(),
+            "granite_supported": _check_granite_support(),
             "transformers_version": get_transformers_version(),
             "required_transformers_version": UNIFIED_TRANSFORMERS_VERSION,
         },
