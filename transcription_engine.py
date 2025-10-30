@@ -8,6 +8,7 @@ import time
 import gc
 import torch
 import logging
+import asyncio
 from pathlib import Path
 from audio_processor import process_audio, format_time
 from model_loader import load_model
@@ -15,16 +16,18 @@ from model_loader import load_model
 logger = logging.getLogger("voxscribe")
 
 
-def transcribe_audio(
+async def transcribe_audio(
     engine, audio_path, model_id, filename=None, file_size=None, save_to_history=True
 ):
     """Unified transcription method for all STT engines."""
-    
+
     # Get global manager instances
-    from global_managers import get_transcription_logger, get_transcription_manager
+    from global_managers import get_transcription_logger, get_transcription_manager, get_websocket_manager
+
     transcription_logger = get_transcription_logger()
     transcription_manager = get_transcription_manager()
-    
+    websocket_manager = get_websocket_manager()
+
     total_start_time = time.time()
 
     # Extract filename if not provided
@@ -45,21 +48,45 @@ def transcribe_audio(
 
     # Log transcription start
     transcription_logger.log_transcription_start(engine, model_id, filename, file_size)
+    
+    # Send initial progress update
+    await websocket_manager.send_transcription_progress(
+        engine, model_id, filename, "starting", "Initializing transcription...", 0
+    )
 
     try:
+        # Send model loading progress
+        await websocket_manager.send_transcription_progress(
+            engine, model_id, filename, "loading_model", f"Loading {engine} model...", 10
+        )
+        
         # Load the appropriate model (this time is not counted in transcription duration)
         model_load_start = time.time()
-        model_result = load_model(engine, model_id)
+        model_result = await asyncio.get_event_loop().run_in_executor(
+            None, load_model, engine, model_id
+        )
         if model_result is None:
             raise Exception("Failed to load model")
         model_load_time = time.time() - model_load_start
 
+        # Send audio processing progress
+        await websocket_manager.send_transcription_progress(
+            engine, model_id, filename, "processing_audio", "Processing audio file...", 30
+        )
+
         # Process audio (this time is not counted in transcription duration)
         audio_process_start = time.time()
-        processed_path, duration_sec = process_audio(audio_path)
+        processed_path, duration_sec = await asyncio.get_event_loop().run_in_executor(
+            None, process_audio, audio_path
+        )
         if processed_path is None:
             raise Exception("Failed to process audio")
         audio_process_time = time.time() - audio_process_start
+
+        # Send transcription start progress
+        await websocket_manager.send_transcription_progress(
+            engine, model_id, filename, "transcribing", f"Transcribing with {engine}...", 50
+        )
 
         try:
             # Start measuring actual transcription time
@@ -128,6 +155,71 @@ def transcribe_audio(
                         f"{duration_sec:.2f}",
                         f"{duration_sec:.2f}",
                         transcription_text.strip(),
+                    ]
+                )
+
+            elif engine == "granite":
+                model_data = model_result
+                model = model_data["model"]
+                processor = model_data["processor"]
+                tokenizer = model_data["tokenizer"]
+
+                # Load and validate audio
+                import torchaudio
+
+                wav, sr = torchaudio.load(processed_path, normalize=True)
+
+                # Ensure mono, 16kHz audio
+                if wav.shape[0] > 1:
+                    wav = wav.mean(dim=0, keepdim=True)
+                if sr != 16000:
+                    import torchaudio.transforms as T
+
+                    resampler = T.Resample(sr, 16000)
+                    wav = resampler(wav)
+
+                # Create chat prompt for transcription
+                system_prompt = "You are Granite a Speech to Text model, developed by IBM. You are a helpful AI assistant"
+                user_prompt = (
+                    "<|audio|>can you transcribe the speech into a written format?"
+                )
+                chat = [
+                    dict(role="system", content=system_prompt),
+                    dict(role="user", content=user_prompt),
+                ]
+                prompt = tokenizer.apply_chat_template(
+                    chat, tokenize=False, add_generation_prompt=True
+                )
+
+                # Process with model
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                model_inputs = processor(
+                    prompt, wav, device=device, return_tensors="pt"
+                ).to(device)
+                model_outputs = model.generate(
+                    **model_inputs, max_new_tokens=600, do_sample=False, num_beams=1
+                )
+
+                # Extract only the new tokens (response)
+                num_input_tokens = model_inputs["input_ids"].shape[-1]
+                new_tokens = torch.unsqueeze(model_outputs[0, num_input_tokens:], dim=0)
+                output_text = tokenizer.batch_decode(
+                    new_tokens, add_special_tokens=False, skip_special_tokens=True
+                )
+
+                transcription_text = output_text[0].strip()
+
+                if not transcription_text:
+                    raise Exception("Granite transcription failed")
+
+                # Simple CSV format (no detailed timestamps from Granite)
+                csv_data = [["Start (s)", "End (s)", "Duration (s)", "Transcription"]]
+                csv_data.append(
+                    [
+                        "0.00",
+                        f"{duration_sec:.2f}",
+                        f"{duration_sec:.2f}",
+                        transcription_text,
                     ]
                 )
 
@@ -238,9 +330,19 @@ def transcribe_audio(
                 duration_sec / total_processing_time if total_processing_time > 0 else 0
             )
 
+            # Send completion progress
+            await websocket_manager.send_transcription_progress(
+                engine, model_id, filename, "complete", "Transcription completed successfully!", 100
+            )
+
             # Log successful transcription
             transcription_logger.log_transcription_complete(
                 engine, model_id, filename, total_processing_time, duration_sec, True
+            )
+
+            # Send transcription complete notification
+            await websocket_manager.send_transcription_complete(
+                engine, model_id, filename, True, duration_sec, total_processing_time, rtfx
             )
 
             # Save to transcription history if requested
@@ -278,6 +380,11 @@ def transcribe_audio(
     except Exception as e:
         total_processing_time = time.time() - total_start_time
         error_msg = str(e)
+
+        # Send error notification
+        await websocket_manager.send_transcription_complete(
+            engine, model_id, filename, False, 0, total_processing_time, 0, error_msg
+        )
 
         # Log failed transcription
         transcription_logger.log_transcription_complete(

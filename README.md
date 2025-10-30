@@ -68,12 +68,12 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 ## Quick Start
 
 ### Prerequisites
-- AWS EC2 g6.xlarge instance with Amazon Linux 2023
+- AWS EC2 g6.xlarge instance with Amazon Linux 2023 6.1 or **Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.8 (Amazon Linux 2023)** [ **Recommended**_]
 - NVIDIA GPU drivers installed
 
 ### Installation Steps
 
-1. **Install NVIDIA GRID drivers**
+1. **Install NVIDIA GRID drivers if using Amazon Linux 2023 6.1 else skip this step**
    ```bash
    # Follow AWS documentation for GRID driver installation
    # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-GRID-driver
@@ -106,6 +106,8 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 
 6. **Create and activate conda environment**
    ```bash
+   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
    conda create -n voxscribe python=3.12 -y
    conda activate voxscribe
    ```

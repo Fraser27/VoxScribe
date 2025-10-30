@@ -40,6 +40,7 @@ from dependencies import (
     ensure_transformers_version,
     _check_voxtral_support,
     _check_nemo_support,
+    _check_granite_support,
     get_transformers_version,
     UNIFIED_TRANSFORMERS_VERSION,
 )
@@ -146,6 +147,7 @@ async def get_status():
         "dependencies": {
             "voxtral_supported": _check_voxtral_support(),
             "nemo_supported": _check_nemo_support(),
+            "granite_supported": _check_granite_support(),
             "transformers_version": get_transformers_version(),
             "required_transformers_version": UNIFIED_TRANSFORMERS_VERSION,
         },
@@ -207,8 +209,19 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive and handle any incoming messages
             data = await websocket.receive_text()
-            # Echo back for connection testing
-            await websocket.send_json({"type": "pong", "message": "Connection active"})
+            
+            try:
+                message = json.loads(data)
+                if message.get("type") == "ping":
+                    # Respond to heartbeat ping
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+                else:
+                    # Echo back other messages for connection testing
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+            except json.JSONDecodeError:
+                # Handle non-JSON messages
+                await websocket.send_json({"type": "pong", "message": "Connection active"})
+                
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
     except Exception as e:
@@ -375,7 +388,7 @@ async def transcribe_endpoint(
             buffer.write(content)
 
         # Transcribe (model is guaranteed to be cached)
-        result = transcribe_audio(
+        result = await transcribe_audio(
             engine, audio_path, model_id, file.filename, len(content)
         )
 
@@ -444,7 +457,7 @@ async def compare_models(
             if not engine or not model_id:
                 continue
 
-            result = transcribe_audio(
+            result = await transcribe_audio(
                 engine,
                 audio_path,
                 model_id,

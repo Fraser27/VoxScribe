@@ -33,6 +33,14 @@ class WebSocketManager:
         logger.info(
             f"WebSocket disconnected. Total connections: {len(self.active_connections)}"
         )
+    
+    def get_connection_count(self) -> int:
+        """Get the number of active WebSocket connections."""
+        return len(self.active_connections)
+    
+    def has_active_connections(self) -> bool:
+        """Check if there are any active WebSocket connections."""
+        return len(self.active_connections) > 0
 
     async def send_to_all(self, message: dict):
         """Send message to all connected clients."""
@@ -46,6 +54,12 @@ class WebSocketManager:
         disconnected = set()
         for connection in self.active_connections:
             try:
+                # Check if connection is still open before sending
+                if hasattr(connection, 'client_state') and connection.client_state.name != 'CONNECTED':
+                    logger.warning(f"WebSocket connection not in CONNECTED state: {connection.client_state}")
+                    disconnected.add(connection)
+                    continue
+                    
                 await connection.send_json(message)
                 logger.info(f"Successfully sent message to WebSocket connection")
             except Exception as e:
@@ -90,6 +104,71 @@ class WebSocketManager:
                 "engine": engine,
                 "model_id": model_id,
                 "success": success,
+                "error": error,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
+    async def send_transcription_progress(
+        self,
+        engine: str,
+        model_id: str,
+        filename: str,
+        stage: str,
+        message: str = "",
+        progress: float = 0,
+    ):
+        """Send transcription progress update."""
+        logger.info(
+            f"Sending transcription progress: {engine}/{model_id} - {stage} - {message}"
+        )
+        
+        # Only send if we have active connections
+        if not self.active_connections:
+            logger.warning("No active WebSocket connections for transcription progress")
+            return
+            
+        await self.send_to_all(
+            {
+                "type": "transcription_progress",
+                "engine": engine,
+                "model_id": model_id,
+                "filename": filename,
+                "stage": stage,
+                "message": message,
+                "progress": progress,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
+    async def send_transcription_complete(
+        self,
+        engine: str,
+        model_id: str,
+        filename: str,
+        success: bool,
+        duration: float = 0,
+        processing_time: float = 0,
+        rtfx: float = 0,
+        error: str = None,
+    ):
+        """Send transcription completion notification."""
+        
+        # Only send if we have active connections
+        if not self.active_connections:
+            logger.warning("No active WebSocket connections for transcription complete")
+            return
+            
+        await self.send_to_all(
+            {
+                "type": "transcription_complete",
+                "engine": engine,
+                "model_id": model_id,
+                "filename": filename,
+                "success": success,
+                "duration": duration,
+                "processing_time": processing_time,
+                "rtfx": rtfx,
                 "error": error,
                 "timestamp": datetime.datetime.now().isoformat(),
             }

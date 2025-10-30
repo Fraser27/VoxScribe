@@ -13,7 +13,7 @@
         <header class="header">
             <h1><i class="fas fa-microphone"></i> VoxScribe</h1>
             <p class="subtitle">Universal Speech-to-Text Platform</p>
-            <p class="description">Compare and evaluate Whisper, Voxtral, Parakeet, and Canary-Qwen models</p>
+            <p class="description">Compare and evaluate Whisper, Voxtral, Parakeet, Canary-Qwen, and Granite Speech models</p>
         </header>
 
         <!-- Theme Toggle -->
@@ -129,8 +129,10 @@
             <div id="progressSection" class="progress-section" style="display: none;">
                 <div class="progress-bar">
                     <div id="progressFill" class="progress-fill"></div>
+                    <div id="transcriptionProgressBar" class="progress-fill transcription-progress" style="background-color: #4CAF50;"></div>
                 </div>
                 <p id="progressText" class="progress-text">Processing...</p>
+                <p id="transcriptionStatus" class="transcription-status"></p>
             </div>
 
             <!-- Results -->
@@ -158,6 +160,10 @@
                         <div class="dependency-item">
                             <span class="dependency-name">NeMo Support:</span>
                             <span id="nemoStatus" class="dependency-status">Checking...</span>
+                        </div>
+                        <div class="dependency-item">
+                            <span class="dependency-name">Granite Support:</span>
+                            <span id="graniteStatus" class="dependency-status">Checking...</span>
                         </div>
                     </div>
                 </div>
@@ -295,6 +301,16 @@
                                 <li>✅ Parakeet: Timestamps support</li>
                                 <li>✅ Canary: State-of-the-art English ASR</li>
                                 <li>🔧 Requires NeMo toolkit</li>
+                            </ul>
+                        </div>
+                        <div class="model-card">
+                            <h5>Granite Speech</h5>
+                            <ul>
+                                <li>✅ IBM's compact speech model</li>
+                                <li>✅ Two-pass design (ASR + language)</li>
+                                <li>✅ Supports ASR and AST</li>
+                                <li>✅ Chat-based interface</li>
+                                <li>🔧 Requires transformers 4.57.0+</li>
                             </ul>
                         </div>
                     </div>

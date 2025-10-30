@@ -8,6 +8,7 @@ from .base_loader import BaseModelLoader
 from .whisper_loader import WhisperLoader
 from .voxtral_loader import VoxtralLoader
 from .nvidia_loader import NvidiaLoader
+from .granite_loader import GraniteLoader
 
 
 class ModelLoaderFactory:
@@ -17,6 +18,7 @@ class ModelLoaderFactory:
         "whisper": WhisperLoader,
         "voxtral": VoxtralLoader,
         "nvidia": NvidiaLoader,
+        "granite": GraniteLoader,
     }
     
     @classmethod
@@ -25,7 +27,7 @@ class ModelLoaderFactory:
         Get a model loader for the specified engine.
         
         Args:
-            engine: The engine name (whisper, voxtral, nvidia)
+            engine: The engine name (whisper, voxtral, nvidia, granite)
             
         Returns:
             BaseModelLoader: The appropriate loader instance
