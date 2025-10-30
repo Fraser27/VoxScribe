@@ -67,6 +67,18 @@ MODEL_REGISTRY = {
             "display_name": "Canary-Qwen 2.5B",
         },
     },
+    "ibm": {
+        "ibm-granite/granite-speech-3.3-2b": {
+            "size": "10GB",
+            "cache_dir": BASE_MODELS_DIR / "ibm" / "granite-speech-3.3-2b",
+            "display_name": "IBM-Granite-Speech 3.3 8B",
+        },
+        "ibm-granite/granite-speech-3.3-8b": {
+            "size": "17GB",
+            "cache_dir": BASE_MODELS_DIR / "ibm" / "granite-speech-3.3-8b",
+            "display_name": "IBM-Granite-Speech 3.3 8B",
+        }
+    }
 }
 
 # Ensure all model directories exist

@@ -153,7 +153,7 @@ def transcribe_audio(
                     wav = resampler(wav)
 
                 # Create chat prompt for transcription
-                system_prompt = "Knowledge Cutoff Date: April 2024.\nToday's Date: April 9, 2025.\nYou are Granite, developed by IBM. You are a helpful AI assistant"
+                system_prompt = "You are Granite a Speech to Text model, developed by IBM. You are a helpful AI assistant"
                 user_prompt = (
                     "<|audio|>can you transcribe the speech into a written format?"
                 )

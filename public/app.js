@@ -13,14 +13,30 @@ class VoxScribe {
     }
 
     async init() {
+        // Show initial loading message
+        this.showToast('Preparing your environment...', 'info');
+
         this.setupEventListeners();
         this.setupTheme();
         this.setupWebSocket();
+
+        // Show progress as we load different components
+        this.showToast('Checking system capabilities...', 'info');
         await this.loadStatus();
+
+        this.showToast('Loading available models (Whisper, Voxtral, Granite, Parakeet, Canary-Qwen)...', 'info');
         await this.loadModels();
+
+        this.showToast('Loading recent activity...', 'info');
         await this.loadRecentLogs();
         await this.loadTranscriptionHistory();
+
         this.updateUI();
+
+        // Final ready message with a slight delay to let other messages show first
+        setTimeout(() => {
+            this.showToast('🎉 VoxScribe is ready! Select an audio file to get started.', 'success');
+        }, 500);
     }
 
     setupWebSocket() {
@@ -28,11 +44,12 @@ class VoxScribe {
         const wsUrl = `${protocol}//${window.location.host}/ws`;
 
         console.log('Attempting to connect to WebSocket:', wsUrl);
+        this.showToast('Connecting to server...', 'info');
         this.websocket = new WebSocket(wsUrl);
 
         this.websocket.onopen = () => {
             console.log('WebSocket connected successfully');
-            this.showToast('Connected to server', 'success');
+            this.showToast('Connected to VoxScribe server', 'success');
         };
 
         this.websocket.onmessage = (event) => {
@@ -47,9 +64,12 @@ class VoxScribe {
 
         this.websocket.onclose = (event) => {
             console.log('WebSocket disconnected:', event.code, event.reason);
-            this.showToast('Disconnected from server', 'warning');
+            this.showToast('Disconnected from server. Reconnecting...', 'warning');
             // Attempt to reconnect after 3 seconds
-            setTimeout(() => this.setupWebSocket(), 3000);
+            setTimeout(() => {
+                this.showToast('Attempting to reconnect...', 'info');
+                this.setupWebSocket();
+            }, 3000);
         };
 
         this.websocket.onerror = (error) => {
@@ -574,7 +594,7 @@ class VoxScribe {
             return;
         }
         const compareBtn = document.getElementById('compareBtn');
-        compareBtn.disabled=true
+        compareBtn.disabled = true
         this.showProgress('Comparing models...');
 
         const formData = new FormData();
@@ -608,7 +628,7 @@ class VoxScribe {
             this.showToast(`Comparison failed: ${error.message}`, 'error');
             console.error('Comparison error:', error);
         } finally {
-            compareBtn.disabled=false
+            compareBtn.disabled = false
         }
     }
 
@@ -652,24 +672,24 @@ class VoxScribe {
     removeSelectedFile() {
         // Clear the selected file
         this.selectedFile = null;
-        
+
         // Clear the file input
         const audioFileInput = document.getElementById('audioFile');
         audioFileInput.value = '';
-        
+
         // Clear the audio preview source
         const audioPreview = document.getElementById('audioPreview');
         if (audioPreview.src) {
             URL.revokeObjectURL(audioPreview.src);
             audioPreview.src = '';
         }
-        
+
         // Hide the file info section
         document.getElementById('fileInfo').style.display = 'none';
-        
+
         // Update UI to reflect no file selected
         this.updateUI();
-        
+
         // Show a toast notification
         this.showToast('File removed successfully', 'info');
     }
@@ -689,7 +709,7 @@ class VoxScribe {
 
             document.getElementById('deviceStatus').textContent = status.device;
 
-            // Update dependency status
+            // Update dependency status and show what's available
             this.updateDependencyStatus('voxtral', status.dependencies.voxtral_supported);
             this.updateDependencyStatus('nemo', status.dependencies.nemo_supported);
             this.updateDependencyStatus('granite', status.dependencies.granite_supported);
@@ -698,6 +718,17 @@ class VoxScribe {
             const dependencyText = transformersVersion ?
                 `Transformers ${transformersVersion}` : 'Dependencies loading...';
             document.getElementById('dependencyStatus').textContent = dependencyText;
+
+            // Show what engines are available
+            const availableEngines = [];
+            if (status.dependencies.voxtral_supported) availableEngines.push('Voxtral');
+            if (status.dependencies.nemo_supported) availableEngines.push('Parakeet & Canary-Qwen');
+            if (status.dependencies.granite_supported) availableEngines.push('Granite');
+            availableEngines.push('Whisper'); // Always available
+
+            if (availableEngines.length > 0) {
+                this.showToast(`Available engines: ${availableEngines.join(', ')}`, 'info');
+            }
 
         } catch (error) {
             console.error('Failed to load status:', error);
@@ -744,6 +775,12 @@ class VoxScribe {
             this.updateModelSelects();
             this.updateCompareModels();
             this.updateCacheInfo();
+
+            // Show how many models are available and cached
+            const cachedCount = this.availableModels.filter(m => m.cached).length;
+            const totalCount = this.availableModels.length;
+            this.showToast(`Found ${totalCount} models (${cachedCount} cached, ${totalCount - cachedCount} available for download)`, 'info');
+
         } catch (error) {
             console.error('Failed to load models:', error);
             this.showToast('Failed to load models', 'error');
@@ -872,7 +909,7 @@ class VoxScribe {
             `;
 
             compareModelsContainer.appendChild(modelCard);
-            
+
             // Add event listener to the checkbox
             const checkbox = modelCard.querySelector('input[type="checkbox"]');
             if (checkbox && !disabled) {
@@ -1558,31 +1595,31 @@ class VoxScribe {
     setupSidebarCollapse() {
         // Get all sidebar headers
         const headers = document.querySelectorAll('.sidebar-header');
-        
+
         // Load saved collapse states from localStorage
         const savedStates = JSON.parse(localStorage.getItem('voxscribe-sidebar-states') || '{}');
-        
+
         headers.forEach(header => {
             const sectionId = header.getAttribute('data-section');
             const content = document.getElementById(`${sectionId}-content`);
-            
+
             if (!content) return;
-            
+
             // Apply saved state or default to expanded
             const isCollapsed = savedStates[sectionId] || false;
             if (isCollapsed) {
                 header.classList.add('collapsed');
                 content.classList.add('collapsed');
             }
-            
+
             // Add click event listener
             header.addEventListener('click', () => {
                 const isCurrentlyCollapsed = header.classList.contains('collapsed');
-                
+
                 // Toggle collapsed state
                 header.classList.toggle('collapsed');
                 content.classList.toggle('collapsed');
-                
+
                 // Save state to localStorage
                 const newStates = JSON.parse(localStorage.getItem('voxscribe-sidebar-states') || '{}');
                 newStates[sectionId] = !isCurrentlyCollapsed;
