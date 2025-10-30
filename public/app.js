@@ -89,7 +89,14 @@ class VoxScribe {
                 console.log('Handling download complete:', data);
                 this.handleDownloadComplete(data);
                 break;
-
+            case 'transcription_progress':
+                console.log('Handling transcription progress:', data);
+                this.updateTranscriptionProgress(data);
+                break;
+            case 'transcription_complete':
+                console.log('Handling transcription complete:', data);
+                this.handleTranscriptionComplete(data);
+                break;
             case 'pong':
                 console.log('WebSocket pong received');
                 break;
@@ -164,6 +171,82 @@ class VoxScribe {
         this.updateModelSelects();
         this.updateCompareModels();
         this.updateDownloadButton();
+    }
+
+    updateTranscriptionProgress(data) {
+        const { engine, model_id, filename, stage, message, progress } = data;
+        
+        // Show progress section if not visible
+        const progressSection = document.getElementById('progressSection');
+        if (progressSection && progressSection.style.display === 'none') {
+            progressSection.style.display = 'block';
+        }
+        
+        // Show transcription progress in the UI
+        const statusElement = document.getElementById('transcriptionStatus');
+        if (statusElement) {
+            let stageText = '';
+            switch (stage) {
+                case 'starting':
+                    stageText = 'Initializing...';
+                    break;
+                case 'loading_model':
+                    stageText = 'Loading model...';
+                    break;
+                case 'processing_audio':
+                    stageText = 'Processing audio...';
+                    break;
+                case 'transcribing':
+                    stageText = 'Transcribing...';
+                    break;
+                case 'complete':
+                    stageText = 'Complete!';
+                    break;
+                default:
+                    stageText = stage;
+            }
+            
+            statusElement.textContent = `${stageText} ${message}`;
+        }
+
+        // Update progress bar if it exists
+        const progressBar = document.getElementById('transcriptionProgressBar');
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+
+        // Show toast notification for key stages
+        if (stage === 'loading_model') {
+            this.showToast(`Loading ${engine} model for ${filename}`, 'info');
+        } else if (stage === 'transcribing') {
+            this.showToast(`Transcribing ${filename} with ${engine}`, 'info');
+        }
+    }
+
+    handleTranscriptionComplete(data) {
+        const { engine, model_id, filename, success, duration, processing_time, rtfx, error } = data;
+        
+        if (success) {
+            const rtfxText = rtfx ? ` (${rtfx.toFixed(2)}x real-time)` : '';
+            this.showToast(
+                `Transcription completed in ${processing_time.toFixed(1)}s${rtfxText}`, 
+                'success'
+            );
+        } else {
+            this.showToast(`Transcription failed: ${error}`, 'error');
+        }
+
+        // Clear transcription status
+        const statusElement = document.getElementById('transcriptionStatus');
+        if (statusElement) {
+            statusElement.textContent = '';
+        }
+
+        // Reset progress bar
+        const progressBar = document.getElementById('transcriptionProgressBar');
+        if (progressBar) {
+            progressBar.style.width = '0%';
+        }
     }
 
     updateDownloadButton() {

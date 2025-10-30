@@ -377,7 +377,7 @@ async def transcribe_endpoint(
             buffer.write(content)
 
         # Transcribe (model is guaranteed to be cached)
-        result = transcribe_audio(
+        result = await transcribe_audio(
             engine, audio_path, model_id, file.filename, len(content)
         )
 
@@ -446,7 +446,7 @@ async def compare_models(
             if not engine or not model_id:
                 continue
 
-            result = transcribe_audio(
+            result = await transcribe_audio(
                 engine,
                 audio_path,
                 model_id,

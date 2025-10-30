@@ -95,6 +95,59 @@ class WebSocketManager:
             }
         )
 
+    async def send_transcription_progress(
+        self,
+        engine: str,
+        model_id: str,
+        filename: str,
+        stage: str,
+        message: str = "",
+        progress: float = 0,
+    ):
+        """Send transcription progress update."""
+        logger.info(
+            f"Sending transcription progress: {engine}/{model_id} - {stage} - {message}"
+        )
+        await self.send_to_all(
+            {
+                "type": "transcription_progress",
+                "engine": engine,
+                "model_id": model_id,
+                "filename": filename,
+                "stage": stage,
+                "message": message,
+                "progress": progress,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
+    async def send_transcription_complete(
+        self,
+        engine: str,
+        model_id: str,
+        filename: str,
+        success: bool,
+        duration: float = 0,
+        processing_time: float = 0,
+        rtfx: float = 0,
+        error: str = None,
+    ):
+        """Send transcription completion notification."""
+        await self.send_to_all(
+            {
+                "type": "transcription_complete",
+                "engine": engine,
+                "model_id": model_id,
+                "filename": filename,
+                "success": success,
+                "duration": duration,
+                "processing_time": processing_time,
+                "rtfx": rtfx,
+                "error": error,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
     def is_downloading(self, engine: str, model_id: str) -> bool:
         """Check if a model is currently being downloaded."""
         task_key = f"{engine}:{model_id}"

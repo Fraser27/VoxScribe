@@ -578,6 +578,21 @@ select.form-control option:disabled {
     font-weight: 500;
 }
 
+.transcription-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    opacity: 0.8;
+}
+
+.transcription-status {
+    margin-top: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
 /* Results */
 .results-section {
     background: var(--bg-secondary);
