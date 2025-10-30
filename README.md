@@ -1,35 +1,6 @@
-# VoxScribe 🎙️
+# VoxScribe - FastAPI Version
 
-## VoxScribe: A platform to test Opensource Speech-to-Text models
-
-VoxScribe is a lightweight, unified platform for testing and comparing multiple open-source speech-to-text (STT) models through a single interface. Born from real-world enterprise challenges where proprietary STT solutions become prohibitively expensive at scale, VoxScribe democratizes access to cutting-edge open-source alternatives.
-
-## The Problem We Solve
-
-Startups transcribing speech at scale face a common dilemma: **cost vs. control**. A contact center processing 100,000 hours of calls monthly can easily spend \$150,000+ on transcription alone. While open-source STT models like Whisper, Voxtral, Parakeet, and Canary-Qwen now rival proprietary solutions in accuracy, evaluating them has been a nightmare:
-
-- **Dependency Hell** 🔥: Conflicting library versions between models (transformers version conflicts between Voxtral and NeMo models)
-- **Inconsistent APIs** 🔄: Each model requires different integration approaches
-- **Complex Setup** ⚙️: Hours or days managing CUDA drivers, Python environments, and debugging
-- **Limited Comparison** 📊: No unified way to test multiple models against your specific use cases
-
-## What VoxScribe Offers
-
-✅ **Unified Interface**: Test 5+ open-source STT models through a single FastAPI backend and clean web UI  
-✅ **Dependency Management**: Handles version conflicts and library incompatibilities automatically  
-✅ **Side-by-Side Comparison**: Upload audio and compare transcriptions across multiple models  
-✅ **Model Caching**: Intelligent caching for faster subsequent runs  
-✅ **Clean API**: RESTful endpoints for easy integration into existing workflows  
-✅ **Cost Control**: Self-hosted solution puts you in control of transcription costs  
-
-## Supported Models
-
-- **OpenAI Whisper** - Industry standard baseline
-- **Mistral Voxtral** - Latest transformer-based approach
-- **NVIDIA Parakeet** - Enterprise-grade accuracy
-- **Canary-Qwen-2.5B** - Multilingual capabilities
-- **And growing...** - Easy to add new models
-
+A clean separation of frontend and backend for the Universal Speech-to-Text Platform.
 
 ## Architecture
 
@@ -42,9 +13,6 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 ├── run.py              # Startup script
 └── requirements.txt    # Python dependencies
 ```
-
-## [Click to Watch the Video](https://www.youtube.com/watch?v=mX9L-x2zj6k)
-[![Watch the video](https://github.com/user-attachments/assets/cf5be7f8-ce30-4f72-8d2e-05904ca48b9e)](https://www.youtube.com/watch?v=mX9L-x2zj6k)
 
 ## Features
 
@@ -68,12 +36,12 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 ## Quick Start
 
 ### Prerequisites
-- AWS EC2 g6.xlarge instance with Amazon Linux 2023 6.1 or **Deep Learning OSS Nvidia Driver AMI GPU PyTorch 2.8 (Amazon Linux 2023)** [ **Recommended**_]
+- AWS EC2 g6.xlarge instance with Amazon Linux 2023
 - NVIDIA GPU drivers installed
 
 ### Installation Steps
 
-1. **Install NVIDIA GRID drivers if using Amazon Linux 2023 6.1 else skip this step**
+1. **Install NVIDIA GRID drivers**
    ```bash
    # Follow AWS documentation for GRID driver installation
    # https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/install-nvidia-driver.html#nvidia-GRID-driver
@@ -106,8 +74,6 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 
 6. **Create and activate conda environment**
    ```bash
-   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
    conda create -n voxscribe python=3.12 -y
    conda activate voxscribe
    ```
