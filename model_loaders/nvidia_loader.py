@@ -7,6 +7,7 @@ import os
 from typing import Any, Tuple
 from pathlib import Path
 from .base_loader import BaseModelLoader
+import torch
 
 
 class NvidiaLoader(BaseModelLoader):
@@ -29,14 +30,11 @@ class NvidiaLoader(BaseModelLoader):
     
     def setup_cache_environment(self, cache_dir: Path) -> None:
         """Setup NeMo-specific cache environment variables."""
+        # Set NeMo cache to the model-specific directory
         os.environ["NEMO_CACHE_DIR"] = str(cache_dir)
-        os.environ["HF_HOME"] = str(cache_dir / "huggingface")
-        os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir / "huggingface" / "hub")
-        os.environ["TRANSFORMERS_CACHE"] = str(cache_dir / "huggingface" / "transformers")
         
-        # Ensure the huggingface cache directory exists
-        (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
-        (cache_dir / "huggingface" / "transformers").mkdir(parents=True, exist_ok=True)
+        # HuggingFace cache is already set globally in config.py
+        # No need to override it here as NeMo models will use the global HF cache
     
     def load_model(self, model_id: str, cache_dir: Path, device: str) -> Any:
         """Load a NeMo model."""
@@ -45,8 +43,12 @@ class NvidiaLoader(BaseModelLoader):
         
         if "parakeet" in model_id:
             model = nemo_asr.models.ASRModel.from_pretrained(model_name=model_id)
+            if torch.cuda.is_available():
+               model = model.cuda() 
         elif "canary" in model_id:
             model = SALM.from_pretrained(model_id)
+            if torch.cuda.is_available():
+               model = model.cuda()
         else:
             raise ValueError(f"Unknown NVIDIA model type: {model_id}")
         

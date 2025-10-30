@@ -30,27 +30,20 @@ class GraniteLoader(BaseModelLoader):
     
     def setup_cache_environment(self, cache_dir: Path) -> None:
         """Setup Granite-specific cache environment variables."""
-        import os
-        os.environ["HF_HOME"] = str(cache_dir / "huggingface")
-        os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir / "huggingface" / "hub")
-        os.environ["TRANSFORMERS_CACHE"] = str(cache_dir / "huggingface" / "transformers")
-        
-        # Ensure the huggingface cache directory exists
-        (cache_dir / "huggingface" / "hub").mkdir(parents=True, exist_ok=True)
-        (cache_dir / "huggingface" / "transformers").mkdir(parents=True, exist_ok=True)
+        # HuggingFace cache is already set globally in config.py
+        # Granite models will use the global HF cache, no need to override
+        pass
     
     def load_model(self, model_id: str, cache_dir: Path, device: str) -> Any:
         """Load a Granite Speech model."""
         from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
         
-        processor = AutoProcessor.from_pretrained(
-            model_id, 
-            cache_dir=str(cache_dir)
-        )
+        # Use the global HuggingFace cache (set in config.py)
+        # No need to specify cache_dir as it's already set via environment variables
+        processor = AutoProcessor.from_pretrained(model_id)
         
         model = AutoModelForSpeechSeq2Seq.from_pretrained(
             model_id,
-            cache_dir=str(cache_dir),
             device_map=device,
             torch_dtype=torch.bfloat16
         )
@@ -66,8 +59,13 @@ class GraniteLoader(BaseModelLoader):
         model_info_map = {
             "ibm-granite/granite-speech-3.3-2b": {
                 "display_name": "Granite Speech 3.3-2B",
-                "size": "4.6GB",
+                "size": "10GB",
                 "description": "IBM Granite Speech 3.3-2B ASR/AST model with two-pass design"
+            },
+            "ibm-granite/granite-speech-3.3-8b": {
+                "display_name": "Granite Speech 3.3-8B",
+                "size": "17GB",
+                "description": "IBM Granite Speech 3.3-8B ASR/AST model with two-pass design"
             }
         }
         
