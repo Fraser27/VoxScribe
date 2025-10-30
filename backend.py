@@ -209,8 +209,19 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive and handle any incoming messages
             data = await websocket.receive_text()
-            # Echo back for connection testing
-            await websocket.send_json({"type": "pong", "message": "Connection active"})
+            
+            try:
+                message = json.loads(data)
+                if message.get("type") == "ping":
+                    # Respond to heartbeat ping
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+                else:
+                    # Echo back other messages for connection testing
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+            except json.JSONDecodeError:
+                # Handle non-JSON messages
+                await websocket.send_json({"type": "pong", "message": "Connection active"})
+                
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
     except Exception as e:

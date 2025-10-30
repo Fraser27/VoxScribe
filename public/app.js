@@ -8,6 +8,9 @@ class VoxScribe {
         this.selectedModels = [];
         this.websocket = null;
         this.pendingDownload = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 3000;
 
         this.init();
     }
@@ -50,6 +53,12 @@ class VoxScribe {
         this.websocket.onopen = () => {
             console.log('WebSocket connected successfully');
             this.showToast('Connected to VoxScribe server', 'success');
+            
+            // Reset reconnection attempts on successful connection
+            this.reconnectAttempts = 0;
+            
+            // Start heartbeat to keep connection alive
+            this.startHeartbeat();
         };
 
         this.websocket.onmessage = (event) => {
@@ -64,18 +73,67 @@ class VoxScribe {
 
         this.websocket.onclose = (event) => {
             console.log('WebSocket disconnected:', event.code, event.reason);
-            this.showToast('Disconnected from server. Reconnecting...', 'warning');
-            // Attempt to reconnect after 3 seconds
-            setTimeout(() => {
-                this.showToast('Attempting to reconnect...', 'info');
-                this.setupWebSocket();
-            }, 3000);
+            
+            // Clear heartbeat
+            this.stopHeartbeat();
+            
+            // Only attempt reconnection if we haven't exceeded max attempts
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                const delay = this.reconnectDelay * this.reconnectAttempts; // Exponential backoff
+                
+                this.showToast(`Disconnected from server. Reconnecting... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'warning');
+                
+                setTimeout(() => {
+                    this.showToast('Attempting to reconnect...', 'info');
+                    this.setupWebSocket();
+                }, delay);
+            } else {
+                this.showToast('Connection lost. Please refresh the page to reconnect.', 'error');
+            }
         };
 
         this.websocket.onerror = (error) => {
             console.error('WebSocket error:', error);
             this.showToast('Connection error', 'error');
         };
+    }
+
+    startHeartbeat() {
+        // Clear any existing heartbeat
+        this.stopHeartbeat();
+        
+        // Send ping every 30 seconds to keep connection alive
+        this.heartbeatInterval = setInterval(() => {
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                console.log('Sending heartbeat ping');
+                this.websocket.send(JSON.stringify({ type: 'ping' }));
+            }
+        }, 30000);
+    }
+
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
+    }
+
+    reconnectWebSocket() {
+        // Reset reconnection attempts and force reconnect
+        this.reconnectAttempts = 0;
+        
+        // Close existing connection if any
+        if (this.websocket) {
+            this.websocket.close();
+        }
+        
+        // Setup new connection
+        this.setupWebSocket();
+    }
+
+    isWebSocketConnected() {
+        return this.websocket && this.websocket.readyState === WebSocket.OPEN;
     }
 
     handleWebSocketMessage(data) {
@@ -542,6 +600,14 @@ class VoxScribe {
     }
 
     async startTranscription() {
+        // Check WebSocket connection before starting transcription
+        if (!this.isWebSocketConnected()) {
+            this.showToast('Reconnecting to server for real-time updates...', 'info');
+            this.reconnectWebSocket();
+            // Wait a moment for connection to establish
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
         const transcribeBtn = document.getElementById('transcribeBtn');
         const engine = document.getElementById('engineSelect').value;
         const modelId = document.getElementById('modelSelect').value;
