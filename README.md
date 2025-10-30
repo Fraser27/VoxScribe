@@ -24,11 +24,11 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 
 ## Supported Models
 
-- **OpenAI Whisper** - Industry standard baseline
-- **Mistral Voxtral** - Latest transformer-based approach
-- **NVIDIA Parakeet** - Enterprise-grade accuracy
-- **Canary-Qwen-2.5B** - Multilingual capabilities
-- **And growing...** - Easy to add new models
+- **OpenAI Whisper** - Industry standard baseline [6-models]
+- **Mistral Voxtral** - Latest transformer-based approach [2-models]
+- **NVIDIA Parakeet** - Enterprise-grade accuracy [1-model]
+- **Canary-Qwen-2.5B** - Multilingual capabilities [1-model]
+- **IBM-Granite-3.3** - Easy to add new models [2-models]
 
 
 ## Architecture
