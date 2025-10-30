@@ -39,7 +39,7 @@ class GraniteLoader(BaseModelLoader):
         from transformers import AutoProcessor, AutoModelForSpeechSeq2Seq
         
         # Use the global HuggingFace cache (set in config.py)
-        # No need to specify cache_dir as it's already set via environment variables
+        # The models will be downloaded to the HF cache automatically
         processor = AutoProcessor.from_pretrained(model_id)
         
         model = AutoModelForSpeechSeq2Seq.from_pretrained(
@@ -53,6 +53,7 @@ class GraniteLoader(BaseModelLoader):
             "processor": processor,
             "tokenizer": processor.tokenizer
         }
+
     
     def get_model_info(self, model_id: str) -> dict:
         """Get information about a Granite Speech model."""

@@ -64,8 +64,18 @@ class ModelManager:
                 self.mark_model_cached(engine, model_id, cache_dir)
 
             return is_cached
-        elif engine == "ibm":
-            # For Granite models, check huggingface cache (where they're actually stored)
+        elif engine == "granite":
+            # For Granite models, check both the marker file and huggingface cache
+            cache_dir = self.registry[engine][model_id]["cache_dir"]
+            marker_file = cache_dir / ".model_loaded"
+            
+            # Check if we have a marker file indicating successful loading
+            if marker_file.exists():
+                if cache_key not in self.cache_info:
+                    self.mark_model_cached(engine, model_id, cache_dir)
+                return True
+            
+            # Also check huggingface cache (where they're actually stored)
             hf_cache_dir = self.base_models_dir / "huggingface" / "hub"
             model_name_safe = model_id.replace("/", "--")
             hf_model_dir = hf_cache_dir / f"models--{model_name_safe}"
@@ -73,7 +83,6 @@ class ModelManager:
 
             # If cached but not in our cache_info, add it
             if is_cached and cache_key not in self.cache_info:
-                cache_dir = self.registry[engine][model_id]["cache_dir"]
                 self.mark_model_cached(engine, model_id, cache_dir)
 
             return is_cached
@@ -182,7 +191,7 @@ class ModelManager:
                     logger.error(f"Error deleting local cache for {model_id}: {e}")
                     deletion_success = False
 
-            elif engine == "ibm":
+            elif engine == "granite":
                 # For Granite models, delete from huggingface cache (where they're actually stored)
                 hf_cache_dir = self.base_models_dir / "huggingface" / "hub"
                 model_name_safe = model_id.replace("/", "--")
@@ -208,7 +217,7 @@ class ModelManager:
                             if any(cache_dir.iterdir()):
                                 shutil.rmtree(cache_dir)
                                 logger.info(
-                                    f"Deleted IBM local cache directory: {cache_dir}"
+                                    f"Deleted Granite local cache directory: {cache_dir}"
                                 )
                         except OSError:
                             # Directory might be empty or already deleted, recreate it
@@ -285,7 +294,7 @@ class ModelManager:
                     total_size += _safe_get_dir_size(cache_dir)
 
                 return total_size
-            elif engine == "ibm":
+            elif engine == "granite":
                 # Check HF cache (primary location) and local cache for Granite models
                 total_size = 0
 
@@ -335,7 +344,7 @@ class ModelManager:
                     if hf_model_dir.exists() and any(hf_model_dir.rglob("*")):
                         cache_dir = config["cache_dir"]
                         self.mark_model_cached(engine, model_id, cache_dir)
-                elif engine == "ibm":
+                elif engine == "granite":
                     # Check huggingface cache for Granite models
                     hf_cache_dir = self.base_models_dir / "huggingface" / "hub"
                     model_name_safe = model_id.replace("/", "--")
