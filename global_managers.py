@@ -15,11 +15,14 @@ def get_managers():
     """Get all manager instances as a dictionary."""
     return _managers
 
-def get_model_manager():
+def get_model_manager(mgr_type:str):
     """Get the global model manager instance."""
-    if "model_manager" not in _managers:
+    if "stt_model_manager" not in _managers or "tts_model_manager" not in _managers:
         raise RuntimeError("Model manager not initialized. Call set_managers() first.")
-    return _managers["model_manager"]
+    if mgr_type=="stt":
+        return _managers["stt_model_manager"]
+    elif mgr_type=="tts":
+        return _managers["tts_model_manager"]
 
 def get_transcription_logger():
     """Get the global transcription logger instance."""

@@ -31,7 +31,6 @@ class ParlerTTSLoader(BaseTTSLoader):
         """Setup cache environment for Parler-TTS."""
         os.environ["HF_HOME"] = str(cache_dir.parent)
         os.environ["HUGGINGFACE_HUB_CACHE"] = str(cache_dir.parent / "hub")
-        os.environ["TRANSFORMERS_CACHE"] = str(cache_dir.parent / "transformers")
     
     def load_model(self, model_id: str, cache_dir: Path, device: str) -> dict:
         """

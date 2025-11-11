@@ -30,7 +30,6 @@ TRANSCRIPTIONS_DIR.mkdir(exist_ok=True)
 # Set global cache directories for Hugging Face and NeMo
 os.environ["HF_HOME"] = str(BASE_MODELS_DIR / "huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "hub")
-os.environ["TRANSFORMERS_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "transformers")
 
 # Model configurations - Speech-to-Text (STT)
 MODEL_REGISTRY = {
@@ -114,3 +113,24 @@ for engine_models in TTS_MODEL_REGISTRY.values():
     for model_config in engine_models.values():
         if isinstance(model_config, dict) and "cache_dir" in model_config:
             model_config["cache_dir"].mkdir(parents=True, exist_ok=True)
+
+
+def get_manager_type_for_engine(engine: str) -> str:
+    """
+    Get the manager type (stt or tts) for a given engine.
+    
+    Args:
+        engine: The engine name (e.g., 'whisper', 'parler', 'voxtral')
+    
+    Returns:
+        'stt' for speech-to-text engines, 'tts' for text-to-speech engines
+    
+    Raises:
+        ValueError: If the engine is not recognized
+    """
+    if engine in MODEL_REGISTRY:
+        return "stt"
+    elif engine in TTS_MODEL_REGISTRY:
+        return "tts"
+    else:
+        raise ValueError(f"Unknown engine: {engine}. Must be one of {list(MODEL_REGISTRY.keys()) + list(TTS_MODEL_REGISTRY.keys())}")

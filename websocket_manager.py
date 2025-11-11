@@ -282,7 +282,11 @@ class WebSocketManager:
 
             # Get global manager instances
             from global_managers import get_model_manager
-            model_manager = get_model_manager()
+            from config import get_manager_type_for_engine
+            
+            # Determine manager type based on engine
+            mgr_type = get_manager_type_for_engine(engine)
+            model_manager = get_model_manager(mgr_type)
             
             # Check if model is already cached
             if model_manager.is_model_cached(engine, model_id):
@@ -296,22 +300,8 @@ class WebSocketManager:
             await self.send_download_progress(
                 engine, model_id, 25, "downloading", "Downloading model files..."
             )
-
-            # Import here to avoid circular imports
-            from dependencies import _check_voxtral_support, _check_nemo_support, UNIFIED_TRANSFORMERS_VERSION
-            from model_loader import load_model
-            
-            # Check if dependencies are available
-            if engine == "voxtral" and not _check_voxtral_support():
-                raise Exception(
-                    f"Voxtral requires transformers {UNIFIED_TRANSFORMERS_VERSION}+"
-                )
-            elif engine == "nvidia" and not _check_nemo_support():
-                raise Exception(
-                    f"NeMo toolkit requires transformers {UNIFIED_TRANSFORMERS_VERSION}+"
-                )
-
             # Create a wrapper function that provides progress updates
+            from model_loader import load_model
             def download_with_progress():
                 try:
                     logger.info(f"Loading model {engine}/{model_id}")
@@ -332,10 +322,6 @@ class WebSocketManager:
             await self.send_download_progress(
                 engine, model_id, 90, "finalizing", "Finalizing download..."
             )
-
-            # Get global manager instances
-            from global_managers import get_model_manager
-            model_manager = get_model_manager()
             
             # Verify model is now cached
             if model_manager.is_model_cached(engine, model_id):

@@ -48,7 +48,7 @@ from logger_setup import setup_logger
 from websocket_manager import WebSocketManager
 from transcription_logger import TranscriptionLogger
 from transcription_manager import TranscriptionManager
-from model_manager import ModelManager
+from stt_manager import STTModelManager
 from transcription_engine import transcribe_audio
 
 # Ensure correct transformers version before proceeding
@@ -95,8 +95,8 @@ transcription_logger = TranscriptionLogger()
 transcription_manager = TranscriptionManager(TRANSCRIPTIONS_DIR)
 
 # Initialize model manager
-model_manager = ModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
-model_manager.scan_existing_models()
+stt_manager = STTModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
+stt_manager.scan_existing_models()
 
 # Initialize TTS model manager
 from config import TTS_MODEL_REGISTRY
@@ -107,7 +107,7 @@ tts_model_manager.scan_existing_models()
 # Set the global manager instances
 from global_managers import set_managers
 set_managers(
-    model_manager=model_manager,
+    stt_model_manager=stt_manager,
     transcription_logger=transcription_logger,
     transcription_manager=transcription_manager,
     websocket_manager=websocket_manager,

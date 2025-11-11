@@ -6,6 +6,8 @@ Model loading functionality for VoxScribe - Unified model loading for all STT en
 import time
 import logging
 from stt_loaders.loader_factory import ModelLoaderFactory
+from config import get_manager_type_for_engine
+from global_managers import get_model_manager, get_transcription_logger
 
 logger = logging.getLogger("voxscribe")
 
@@ -18,9 +20,6 @@ async def load_model_async(engine, model_id):
         None, load_model, engine, model_id
     )
 
-
-from global_managers import get_model_manager, get_transcription_logger
-
 def load_model(engine, model_id):
     """Unified model loading for all STT engines using the factory pattern."""
     from config import DEVICE
@@ -28,8 +27,9 @@ def load_model(engine, model_id):
     load_start_time = time.time()
 
     try:
-        # Get global manager instances
-        model_manager = get_model_manager()
+        # Determine manager type based on engine
+        mgr_type = get_manager_type_for_engine(engine)
+        model_manager = get_model_manager(mgr_type)
         transcription_logger = get_transcription_logger()
 
         # Get the appropriate loader for this engine

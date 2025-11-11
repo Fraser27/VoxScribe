@@ -12,7 +12,7 @@ from typing import Dict
 logger = logging.getLogger("voxscribe")
 
 
-class ModelManager:
+class STTModelManager:
     """Unified model management system for all STT engines."""
 
     def __init__(self, registry: Dict, base_models_dir: Path):
