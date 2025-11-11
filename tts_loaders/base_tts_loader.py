@@ -83,3 +83,15 @@ class BaseTTSLoader(ABC):
             cache_dir: Directory to use for caching
         """
         pass
+    
+    def post_load_setup(self, model: Any, model_id: str, cache_dir: Path) -> None:
+        """
+        Perform any post-load setup if needed.
+        Default implementation does nothing.
+        
+        Args:
+            model: The loaded model
+            model_id: The model identifier
+            cache_dir: Directory used for caching
+        """
+        pass
