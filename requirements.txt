@@ -21,6 +21,7 @@ openai-whisper>=20250625
 # NeMo dependencies (Parakeet and Canary-Qwen)
 # Note: Canary-Qwen requires latest NeMo trunk version
 nemo_toolkit[asr,tts] @ git+https://github.com/NVIDIA/NeMo.git
+# nemo_toolkit[asr,tts]==2.5.3
 megatron-core
 sacrebleu
 cuda-python>=12.3
@@ -29,6 +30,6 @@ mistral-common
 
 # TTS dependencies
 # Parler-TTS for multilingual text-to-speech
-git+https://github.com/huggingface/parler-tts.git
+# git+https://github.com/huggingface/parler-tts.git
 
 

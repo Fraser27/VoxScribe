@@ -6,13 +6,15 @@ TTS Model loader factory
 from typing import Dict, Type
 from .base_tts_loader import BaseTTSLoader
 from .parler_loader import ParlerTTSLoader
+from .higgs_loader import HiggsAudioLoader
 
 
 class TTSLoaderFactory:
     """Factory for creating TTS model loaders."""
     
     _loaders: Dict[str, Type[BaseTTSLoader]] = {
-        "parler": ParlerTTSLoader,
+        # "parler": ParlerTTSLoader,
+        "higgs": HiggsAudioLoader,
     }
     
     @classmethod

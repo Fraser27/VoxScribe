@@ -99,6 +99,15 @@ TTS_MODEL_REGISTRY = {
                 "Dutch": ["Mark", "Jessica", "Michelle"]
             }
         }
+    },
+    "higgs": {
+        "bosonai/higgs-audio-v2-generation-3B-base|bosonai/higgs-audio-v2-tokenizer": {
+            "size": "6GB",
+            "cache_dir": BASE_MODELS_DIR / "higgs" / "v2-generation-3B-base",
+            "display_name": "Higgs Audio V2 Generation 3B Base",
+            "description": "Expressive audio generation with scene descriptions",
+            "supports_scene_description": True
+        }
     }
 }
 
