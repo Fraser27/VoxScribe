@@ -27,4 +27,8 @@ cuda-python>=12.3
 sentencepiece>=0.2.0
 mistral-common
 
+# TTS dependencies
+# Parler-TTS for multilingual text-to-speech
+git+https://github.com/huggingface/parler-tts.git
+
 

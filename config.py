@@ -32,7 +32,7 @@ os.environ["HF_HOME"] = str(BASE_MODELS_DIR / "huggingface")
 os.environ["HUGGINGFACE_HUB_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "hub")
 os.environ["TRANSFORMERS_CACHE"] = str(BASE_MODELS_DIR / "huggingface" / "transformers")
 
-# Model configurations
+# Model configurations - Speech-to-Text (STT)
 MODEL_REGISTRY = {
     "whisper": {
         "tiny": {"size": "39MB", "cache_dir": BASE_MODELS_DIR / "whisper"},
@@ -81,8 +81,36 @@ MODEL_REGISTRY = {
     }
 }
 
+# TTS Model configurations - Text-to-Speech
+TTS_MODEL_REGISTRY = {
+    "parler": {
+        "parler-tts/parler-tts-mini-multilingual-v1.1": {
+            "size": "1.2GB",
+            "cache_dir": BASE_MODELS_DIR / "parler" / "mini-multilingual-v1.1",
+            "display_name": "Parler-TTS Mini Multilingual",
+            "languages": ["English", "French", "Spanish", "Portuguese", "Polish", "German", "Italian", "Dutch"],
+            "speakers": {
+                "English": ["Steven", "Olivia", "Megan"],
+                "French": ["Daniel", "Michelle", "Christine", "Megan"],
+                "German": ["Nicole", "Christopher", "Megan", "Michelle"],
+                "Italian": ["Julia", "Richard", "Megan"],
+                "Polish": ["Alex", "Natalie"],
+                "Portuguese": ["Sophia", "Nicholas"],
+                "Spanish": ["Steven", "Olivia", "Megan"],
+                "Dutch": ["Mark", "Jessica", "Michelle"]
+            }
+        }
+    }
+}
+
 # Ensure all model directories exist
 for engine_models in MODEL_REGISTRY.values():
+    for model_config in engine_models.values():
+        if isinstance(model_config, dict) and "cache_dir" in model_config:
+            model_config["cache_dir"].mkdir(parents=True, exist_ok=True)
+
+# Ensure all TTS model directories exist
+for engine_models in TTS_MODEL_REGISTRY.values():
     for model_config in engine_models.values():
         if isinstance(model_config, dict) and "cache_dir" in model_config:
             model_config["cache_dir"].mkdir(parents=True, exist_ok=True)

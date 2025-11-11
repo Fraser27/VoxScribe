@@ -5,7 +5,7 @@ Model loading functionality for VoxScribe - Unified model loading for all STT en
 
 import time
 import logging
-from model_loaders.loader_factory import ModelLoaderFactory
+from stt_loaders.loader_factory import ModelLoaderFactory
 
 logger = logging.getLogger("voxscribe")
 

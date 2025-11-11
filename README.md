@@ -1,8 +1,8 @@
 # VoxScribe 🎙️
 
-## VoxScribe: A platform to test Opensource Speech-to-Text models
+## VoxScribe: A Universal Platform for Speech-to-Text and Text-to-Speech Models
 
-VoxScribe is a lightweight, unified platform for testing and comparing multiple open-source speech-to-text (STT) models through a single interface. Born from real-world enterprise challenges where proprietary STT solutions become prohibitively expensive at scale, VoxScribe democratizes access to cutting-edge open-source alternatives.
+VoxScribe is a lightweight, unified platform for testing and comparing multiple open-source speech models through a single interface. Born from real-world enterprise challenges where proprietary solutions become prohibitively expensive at scale, VoxScribe democratizes access to cutting-edge open-source alternatives for both Speech-to-Text (STT) and Text-to-Speech (TTS).
 
 ## The Problem We Solve
 
@@ -15,32 +15,53 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
 
 ## What VoxScribe Offers
 
-✅ **Unified Interface**: Test 5+ open-source STT models through a single FastAPI backend and clean web UI  
+✅ **Unified Interface**: Test 5+ open-source STT models and TTS models through a single FastAPI backend and clean web UI  
 ✅ **Dependency Management**: Handles version conflicts and library incompatibilities automatically  
-✅ **Side-by-Side Comparison**: Upload audio and compare transcriptions across multiple models  
+✅ **Side-by-Side Comparison**: Upload audio and compare transcriptions, or compare synthesized speech across multiple models  
 ✅ **Model Caching**: Intelligent caching for faster subsequent runs  
 ✅ **Clean API**: RESTful endpoints for easy integration into existing workflows  
-✅ **Cost Control**: Self-hosted solution puts you in control of transcription costs  
+✅ **Cost Control**: Self-hosted solution puts you in control of transcription and synthesis costs  
+✅ **Dual Functionality**: Both Speech-to-Text and Text-to-Speech in one platform
 
 ## Supported Models
 
+### Speech-to-Text (STT)
 - **OpenAI Whisper** - Industry standard baseline [6-models]
 - **Mistral Voxtral** - Latest transformer-based approach [2-models]
 - **NVIDIA Parakeet** - Enterprise-grade accuracy [1-model]
 - **Canary-Qwen-2.5B** - Multilingual capabilities [1-model]
 - **IBM-Granite-3.3** - Easy to add new models [2-models]
 
+### Text-to-Speech (TTS)
+- **Parler-TTS Mini Multilingual** - 8 European languages, 16 speaker voices [1-model]
+  - Languages: English, French, Spanish, Portuguese, Polish, German, Italian, Dutch
+  - Voice description-based synthesis
+  - Named speaker support
+
 
 ## Architecture
 
 ```
-├── backend.py          # FastAPI backend with STT logic
-├── public/             # Frontend static files
-│   ├── index.html      # Main HTML interface
-│   ├── styles.css      # CSS styling with dark/light theme
-│   └── app.js          # JavaScript frontend logic
-├── run.py              # Startup script
-└── requirements.txt    # Python dependencies
+├── backend.py                  # FastAPI backend with STT & TTS logic
+├── model_loaders/              # STT model loader implementations
+│   ├── whisper_loader.py
+│   ├── voxtral_loader.py
+│   ├── nvidia_loader.py
+│   └── granite_loader.py
+├── tts_loaders/                # TTS model loader implementations
+│   ├── parler_loader.py
+│   └── tts_loader_factory.py
+├── tts_manager.py              # TTS model management
+├── tts_synthesis_engine.py     # TTS synthesis orchestration
+├── public/                     # Frontend static files
+│   ├── index.html              # Main HTML interface with tabs
+│   ├── styles.css              # CSS styling with dark/light theme
+│   ├── app.js                  # JavaScript frontend logic (STT)
+│   └── tts.js                  # JavaScript TTS functionality
+├── run.py                      # Startup script
+├── requirements.txt            # Python dependencies
+├── TTS_README.md               # Detailed TTS documentation
+└── INSTALL_TTS.md              # TTS installation guide
 ```
 
 ## [Click to Watch the Video](https://www.youtube.com/watch?v=mX9L-x2zj6k)

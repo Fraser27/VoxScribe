@@ -1782,4 +1782,5 @@ class VoxScribe {
 let voxScribe;
 document.addEventListener('DOMContentLoaded', () => {
     voxScribe = new VoxScribe();
+    window.voxscribe = voxScribe; // Make globally accessible for TTS manager
 });

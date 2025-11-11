@@ -12,9 +12,19 @@
         <!-- Header -->
         <header class="header">
             <h1><i class="fas fa-microphone"></i> VoxScribe</h1>
-            <p class="subtitle">Universal Speech-to-Text Platform</p>
-            <p class="description">Compare and evaluate Whisper, Voxtral, Parakeet, Canary-Qwen, and Granite Speech models</p>
+            <p class="subtitle">Universal Speech Platform</p>
+            <p class="description">Compare and evaluate Speech-to-Text and Text-to-Speech models</p>
         </header>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" data-tab="stt">
+                <i class="fas fa-microphone"></i> Speech-to-Text
+            </button>
+            <button class="tab-btn" data-tab="tts">
+                <i class="fas fa-volume-up"></i> Text-to-Speech
+            </button>
+        </div>
 
         <!-- Theme Toggle -->
         <div class="theme-toggle">
@@ -37,6 +47,9 @@
 
         <!-- Main Content -->
         <div class="main-content">
+        
+        <!-- STT Tab Content -->
+        <div id="stt-content" class="tab-content active">
             <!-- Mode Selection -->
             <div class="mode-selection">
                 <h3>Mode Selection</h3>
@@ -142,6 +155,119 @@
                     <!-- Results will be dynamically inserted here -->
                 </div>
             </div>
+        </div>
+        <!-- End STT Tab Content -->
+        
+        <!-- TTS Tab Content -->
+        <div id="tts-content" class="tab-content" style="display: none;">
+            <!-- Mode Selection -->
+            <div class="mode-selection">
+                <h3>Mode Selection</h3>
+                <div class="radio-group">
+                    <label class="radio-label">
+                        <input type="radio" name="tts-mode" value="single" checked>
+                        <span class="radio-custom"></span>
+                        Single Model
+                    </label>
+                    <label class="radio-label">
+                        <input type="radio" name="tts-mode" value="compare">
+                        <span class="radio-custom"></span>
+                        Compare Models
+                    </label>
+                </div>
+            </div>
+
+            <!-- TTS Model Selection -->
+            <div id="ttsModelSelection" class="model-selection">
+                <h3>Model Selection</h3>
+                <div id="ttsSingleModelSelect" class="single-model-select">
+                    <div class="form-group">
+                        <label for="ttsEngineSelect">Engine:</label>
+                        <select id="ttsEngineSelect" class="form-control">
+                            <option value="">Select Engine...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ttsModelSelect">Model:</label>
+                        <div class="model-select-container">
+                            <select id="ttsModelSelect" class="form-control">
+                                <option value="">Select Model...</option>
+                            </select>
+                            <button id="downloadTTSModelBtn" class="btn btn-download" style="display: none;">
+                                <i class="fas fa-download"></i>
+                                Download Model
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Configuration -->
+            <div class="voice-config-section">
+                <h3>Voice Configuration</h3>
+                <div class="form-group">
+                    <label for="ttsLanguage">Language (optional):</label>
+                    <select id="ttsLanguage" class="form-control">
+                        <option value="">Auto-detect</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ttsSpeaker">Speaker (optional):</label>
+                    <select id="ttsSpeaker" class="form-control">
+                        <option value="">Default</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="ttsDescription">Voice Description:</label>
+                    <textarea id="ttsDescription" class="form-control" rows="3" 
+                        placeholder="Describe the voice characteristics (e.g., 'A female speaker with a calm and clear voice')"></textarea>
+                    <small class="form-hint">Describe the desired voice characteristics, speed, pitch, and style</small>
+                </div>
+            </div>
+
+            <!-- Text Input -->
+            <div class="text-input-section">
+                <h3>Text Input</h3>
+                <div class="form-group">
+                    <textarea id="ttsTextInput" class="form-control" rows="6" 
+                        placeholder="Enter the text you want to convert to speech..."></textarea>
+                    <div class="text-stats">
+                        <span id="ttsCharCount">0 characters</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TTS Action Buttons -->
+            <div class="action-section">
+                <button id="synthesizeBtn" class="btn btn-primary" disabled>
+                    <i class="fas fa-play"></i>
+                    <span id="synthesizeBtnText">Synthesize</span>
+                </button>
+                <button id="compareTTSBtn" class="btn btn-secondary" style="display: none;" disabled>
+                    <i class="fas fa-balance-scale"></i>
+                    <span id="compareTTSBtnText">Compare Models</span>
+                </button>
+            </div>
+
+            <!-- TTS Progress -->
+            <div id="ttsProgressSection" class="progress-section" style="display: none;">
+                <div class="progress-bar">
+                    <div id="ttsProgressFill" class="progress-fill"></div>
+                </div>
+                <p id="ttsProgressText" class="progress-text">Processing...</p>
+                <p id="ttsStatus" class="transcription-status"></p>
+            </div>
+
+            <!-- TTS Results -->
+            <div id="ttsResultsSection" class="results-section" style="display: none;">
+                <h3>Synthesized Audio</h3>
+                <div id="ttsResultsContent" class="results-content">
+                    <!-- TTS results will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+        <!-- End TTS Tab Content -->
+        
         </div>
 
         <!-- Sidebar -->
@@ -458,5 +584,6 @@
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="/static/app.js"></script>
+    <script src="/static/tts.js"></script>
 </body>
 </html>

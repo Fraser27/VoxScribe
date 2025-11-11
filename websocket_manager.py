@@ -174,6 +174,67 @@ class WebSocketManager:
             }
         )
 
+    async def send_synthesis_progress(
+        self,
+        engine: str,
+        model_id: str,
+        text: str,
+        stage: str,
+        message: str = "",
+        progress: float = 0,
+    ):
+        """Send TTS synthesis progress update."""
+        logger.info(
+            f"Sending synthesis progress: {engine}/{model_id} - {stage} - {message}"
+        )
+        
+        if not self.active_connections:
+            logger.warning("No active WebSocket connections for synthesis progress")
+            return
+            
+        await self.send_to_all(
+            {
+                "type": "synthesis_progress",
+                "engine": engine,
+                "model_id": model_id,
+                "text": text[:50] + "..." if len(text) > 50 else text,
+                "stage": stage,
+                "message": message,
+                "progress": progress,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
+    async def send_synthesis_complete(
+        self,
+        engine: str,
+        model_id: str,
+        text: str,
+        success: bool,
+        audio_duration: float = 0,
+        processing_time: float = 0,
+        error: str = None,
+    ):
+        """Send TTS synthesis completion notification."""
+        
+        if not self.active_connections:
+            logger.warning("No active WebSocket connections for synthesis complete")
+            return
+            
+        await self.send_to_all(
+            {
+                "type": "synthesis_complete",
+                "engine": engine,
+                "model_id": model_id,
+                "text": text[:50] + "..." if len(text) > 50 else text,
+                "success": success,
+                "audio_duration": audio_duration,
+                "processing_time": processing_time,
+                "error": error,
+                "timestamp": datetime.datetime.now().isoformat(),
+            }
+        )
+
     def is_downloading(self, engine: str, model_id: str) -> bool:
         """Check if a model is currently being downloaded."""
         task_key = f"{engine}:{model_id}"
