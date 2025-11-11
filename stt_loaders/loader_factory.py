@@ -11,7 +11,7 @@ from .nvidia_loader import NvidiaLoader
 from .granite_loader import GraniteLoader
 
 
-class ModelLoaderFactory:
+class STTModelLoaderFactory:
     """Factory for creating model loaders."""
     
     _loaders: Dict[str, Type[BaseModelLoader]] = {

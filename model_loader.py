@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Model loading functionality for VoxScribe - Unified model loading for all STT engines
+Model loading functionality for VoxScribe - Unified model loading for STT and TTS engines
 """
 
 import time
 import logging
-from stt_loaders.loader_factory import ModelLoaderFactory
 from config import get_manager_type_for_engine
-from global_managers import get_model_manager, get_transcription_logger
+from global_managers import get_model_manager, get_transcription_logger, get_loader_factory
 
 logger = logging.getLogger("voxscribe")
 
@@ -21,7 +20,7 @@ async def load_model_async(engine, model_id):
     )
 
 def load_model(engine, model_id):
-    """Unified model loading for all STT engines using the factory pattern."""
+    """Unified model loading for all STT and TTS engines using the factory pattern."""
     from config import DEVICE
 
     load_start_time = time.time()
@@ -32,8 +31,11 @@ def load_model(engine, model_id):
         model_manager = get_model_manager(mgr_type)
         transcription_logger = get_transcription_logger()
 
+        # Get the appropriate loader factory based on manager type
+        loader_factory = get_loader_factory(mgr_type)
+        
         # Get the appropriate loader for this engine
-        loader = ModelLoaderFactory.get_loader(engine)
+        loader = loader_factory.get_loader(engine)
 
         # Check dependencies first
         is_supported, error_msg = loader.check_dependencies()
@@ -85,7 +87,12 @@ def load_model(engine, model_id):
 def get_model_info(engine, model_id):
     """Get information about a model using the appropriate loader."""
     try:
-        loader = ModelLoaderFactory.get_loader(engine)
+        # Determine manager type and get appropriate factory
+        mgr_type = get_manager_type_for_engine(engine)
+        loader_factory = get_loader_factory(mgr_type)
+        
+        # Get the loader and model info
+        loader = loader_factory.get_loader(engine)
         return loader.get_model_info(model_id)
     except Exception as e:
         logger.error(f"Error getting model info for {engine}/{model_id}: {e}")
