@@ -10,7 +10,7 @@ from packaging import version
 
 logger = logging.getLogger("voxscribe")
 
-UNIFIED_TRANSFORMERS_VERSION = "4.57.0"
+UNIFIED_TRANSFORMERS_VERSION = "4.47.0"
 
 
 def _clear_module_cache_and_refresh(modules_to_clear=None):

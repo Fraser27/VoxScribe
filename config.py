@@ -16,9 +16,6 @@ SUPPORTED_FORMATS = ["wav", "mp3", "flac", "m4a", "ogg"]
 # Processing limits
 MAX_RECOMMENDED_DURATION = 30 * 60
 
-# Transformers version requirement
-UNIFIED_TRANSFORMERS_VERSION = "4.47.0"
-
 # Directory paths
 BASE_MODELS_DIR = Path(os.getcwd()) / "models"
 TRANSCRIPTIONS_DIR = Path(os.getcwd()) / "transcriptions"
