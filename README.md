@@ -97,7 +97,7 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
    ```
    - Accept the license agreement (type `yes`)
    - Confirm installation location (default is fine)
-   - Initialize Conda (type `yes` when prompted)
+   - Do you wish to update your shell profile to automatically initialize conda (type `yes` when prompted)
 
 5. **Restart your shell or source bashrc**
    ```bash
