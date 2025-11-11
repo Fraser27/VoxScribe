@@ -133,7 +133,10 @@ body {
 }
 
 .tab-content.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    width: 100%;
 }
 
 /* Voice Configuration Section */
