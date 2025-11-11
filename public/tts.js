@@ -16,12 +16,7 @@ class TTSManager {
     }
     
     setupEventListeners() {
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                this.switchTab(e.target.closest('.tab-btn').dataset.tab);
-            });
-        });
+        // Tab switching is handled by main app.js, we just listen for tab changes
         
         // TTS mode selection
         document.querySelectorAll('input[name="tts-mode"]').forEach(radio => {
@@ -61,18 +56,7 @@ class TTSManager {
         });
     }
     
-    switchTab(tab) {
-        // Update tab buttons
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.tab === tab);
-        });
-        
-        // Update tab content
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.toggle('active', content.id === `${tab}-content`);
-        });
-    }
-    
+
     async loadTTSModels() {
         try {
             const response = await fetch('/api/tts/models');

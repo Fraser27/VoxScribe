@@ -379,6 +379,14 @@ class VoxScribe {
     }
 
     setupEventListeners() {
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const tab = e.target.closest('.tab-btn').dataset.tab;
+                this.switchTab(tab);
+            });
+        });
+
         // Sidebar collapsible sections
         this.setupSidebarCollapse();
 
@@ -1739,6 +1747,18 @@ class VoxScribe {
     updateThemeIcon(theme) {
         const icon = document.querySelector('#themeToggle i');
         icon.className = theme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    switchTab(tab) {
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+        
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.toggle('active', content.id === `${tab}-content`);
+        });
     }
 
     setupSidebarCollapse() {

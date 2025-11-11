@@ -46,9 +46,11 @@ body {
 .container {
     display: grid;
     grid-template-columns: 1fr 300px;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto auto 1fr;
     grid-template-areas:
         "header header"
+        "tabs tabs"
+        "status status"
         "main sidebar";
     min-height: 100vh;
     gap: 2rem;
@@ -85,10 +87,11 @@ body {
 
 /* Tab Navigation */
 .tab-navigation {
+    grid-area: tabs;
     display: flex;
     gap: 1rem;
     justify-content: center;
-    margin: 2rem 0;
+    margin: 0 0 1rem 0;
     border-bottom: 2px solid var(--border-color);
 }
 
@@ -211,13 +214,14 @@ body {
 
 /* Status Bar */
 .status-bar {
+    grid-area: status;
     display: flex;
     gap: 2rem;
     padding: 1rem;
     background: var(--bg-secondary);
     border-radius: 8px;
     border: 1px solid var(--border-color);
-    margin-bottom: 2rem;
+    margin-bottom: 1rem;
 }
 
 .status-item {
