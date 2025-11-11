@@ -4,6 +4,8 @@ TTS Model Manager - handles TTS model caching and loading
 """
 
 import os
+import json
+import datetime
 import shutil
 from pathlib import Path
 from typing import Dict, Optional, Any
@@ -19,6 +21,22 @@ class TTSModelManager:
         self.model_registry = model_registry
         self.base_models_dir = base_models_dir
         self.loaded_models = {}
+        self.cache_info_file = base_models_dir / "tts_cache_info.json"
+        self.load_cache_info()
+    
+    def load_cache_info(self):
+        """Load cached model information."""
+        if self.cache_info_file.exists():
+            with open(self.cache_info_file, "r") as f:
+                self.cache_info = json.load(f)
+        else:
+            self.cache_info = {}
+    
+    def save_cache_info(self):
+        """Save cached model information."""
+        self.base_models_dir.mkdir(parents=True, exist_ok=True)
+        with open(self.cache_info_file, "w") as f:
+            json.dump(self.cache_info, f, indent=2)
         
     def scan_existing_models(self):
         """Scan for existing cached TTS models."""
@@ -104,3 +122,26 @@ class TTSModelManager:
             return None
         
         return self.model_registry[engine][model_id]
+    
+    def mark_model_cached(self, engine: str, model_id: str, cache_path: Path) -> None:
+        """Mark a model as cached."""
+        cache_key = f"{engine}:{model_id}"
+        self.cache_info[cache_key] = {
+            "engine": engine,
+            "model_id": model_id,
+            "cache_path": str(cache_path),
+            "cached_at": datetime.datetime.now().isoformat(),
+            "size": self.get_model_size(engine, model_id),
+        }
+        self.save_cache_info()
+    
+    def get_model_size(self, engine: str, model_id: str) -> str:
+        """Get the size of a model from the registry."""
+        if engine not in self.model_registry:
+            return "Unknown"
+        
+        if model_id not in self.model_registry[engine]:
+            return "Unknown"
+        
+        config = self.model_registry[engine][model_id]
+        return config.get("size", "Unknown")
