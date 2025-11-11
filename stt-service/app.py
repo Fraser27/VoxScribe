@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FastAPI backend for VoxScribe - Universal STT Platform
+FastAPI backend for VoxScribe - STT + Frontend Service
 """
 
 import os
@@ -9,7 +9,7 @@ import time
 import tempfile
 import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 import io
 import csv
 
@@ -23,8 +23,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, FileResponse, Response
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -56,17 +55,15 @@ print("Checking transformers version...")
 current_version = ensure_transformers_version()
 
 if current_version is None:
-    print(
-        "✗ Failed to ensure correct transformers version. Application may not work correctly."
-    )
+    print("✗ Failed to ensure correct transformers version. Application may not work correctly.")
     print("Please manually install transformers >= 4.57.0")
 else:
     print(f"✓ Using transformers version: {current_version}")
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="VoxScribe API",
-    description="Universal Speech-to-Text Platform API",
+    title="VoxScribe STT API",
+    description="Speech-to-Text Platform API",
     version="1.0.0",
 )
 
@@ -79,8 +76,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-app.mount("/static", StaticFiles(directory="public"), name="static")
+# No static files - frontend is separate service
 
 # Initialize logger
 logger = setup_logger()
@@ -98,12 +94,6 @@ transcription_manager = TranscriptionManager(TRANSCRIPTIONS_DIR)
 stt_model_manager = STTModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
 stt_model_manager.scan_existing_models()
 
-# Initialize TTS model manager
-from config import TTS_MODEL_REGISTRY
-from tts_manager import TTSModelManager
-tts_model_manager = TTSModelManager(TTS_MODEL_REGISTRY, BASE_MODELS_DIR)
-tts_model_manager.scan_existing_models()
-
 # Set the global manager instances
 from global_managers import set_managers
 set_managers(
@@ -111,7 +101,6 @@ set_managers(
     transcription_logger=transcription_logger,
     transcription_manager=transcription_manager,
     websocket_manager=websocket_manager,
-    tts_model_manager=tts_model_manager
 )
 
 # Pydantic models
@@ -121,28 +110,14 @@ class TranscriptionRequest(BaseModel):
 
 
 class ComparisonRequest(BaseModel):
-    engines: List[Dict[str, str]]  # [{"engine": "whisper", "model_id": "base"}, ...]
-
-
-class DependencyStatus(BaseModel):
-    voxtral_supported: bool
-    nemo_supported: bool
-    transformers_version: Optional[str] = None
-
-
-class ModelInfo(BaseModel):
-    engine: str
-    model_id: str
-    display_name: str
-    size: str
-    cached: bool
+    engines: List[Dict[str, str]]
 
 
 # API Routes
 @app.get("/")
-async def serve_index():
-    """Serve the main HTML page."""
-    return FileResponse("public/index.html")
+async def root():
+    """Root endpoint."""
+    return {"service": "VoxScribe STT", "version": "1.0.0", "status": "running"}
 
 
 @app.get("/api/status")
@@ -161,11 +136,12 @@ async def get_status():
     }
 
 
-@app.get("/api/test")
-async def test_endpoint():
-    """Test endpoint to verify API is working."""
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
     return {
-        "message": "API is working!",
+        "status": "healthy",
+        "service": "stt",
         "timestamp": datetime.datetime.now().isoformat(),
     }
 
@@ -191,7 +167,6 @@ async def get_logs(log_type: str = "transcriptions", limit: int = 100):
         with open(log_file, "r", encoding="utf-8") as f:
             lines = f.readlines()
 
-        # Get the last 'limit' lines
         recent_lines = lines[-limit:] if len(lines) > limit else lines
 
         for line in recent_lines:
@@ -214,19 +189,15 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket_manager.connect(websocket)
     try:
         while True:
-            # Keep connection alive and handle any incoming messages
             data = await websocket.receive_text()
             
             try:
                 message = json.loads(data)
                 if message.get("type") == "ping":
-                    # Respond to heartbeat ping
                     await websocket.send_json({"type": "pong", "message": "Connection active"})
                 else:
-                    # Echo back other messages for connection testing
                     await websocket.send_json({"type": "pong", "message": "Connection active"})
             except json.JSONDecodeError:
-                # Handle non-JSON messages
                 await websocket.send_json({"type": "pong", "message": "Connection active"})
                 
     except WebSocketDisconnect:
@@ -238,7 +209,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/stt/models")
 async def get_models():
-    """Get available models for all engines."""
+    """Get available STT models."""
     models = []
 
     for engine, engine_models in MODEL_REGISTRY.items():
@@ -270,17 +241,14 @@ async def download_model(
 
     logger.info(f"Download request received for {engine}/{model_id}")
 
-    # Validate engine and model
     if engine not in MODEL_REGISTRY or model_id not in MODEL_REGISTRY[engine]:
         logger.error(f"Invalid engine or model_id: {engine}/{model_id}")
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
 
-    # Check if already cached
     if stt_model_manager.is_model_cached(engine, model_id):
         logger.info(f"Model {engine}/{model_id} already cached")
         return {"success": True, "message": "Model already cached", "cached": True}
 
-    # Check if already downloading
     if websocket_manager.is_downloading(engine, model_id):
         logger.info(f"Model {engine}/{model_id} already downloading")
         return {
@@ -289,7 +257,6 @@ async def download_model(
             "downloading": True,
         }
 
-    # Start download task in background
     logger.info(f"Starting background download task for {engine}/{model_id}")
     background_tasks.add_task(websocket_manager.start_download_task, engine, model_id)
 
@@ -311,25 +278,21 @@ async def transcribe_endpoint(
 ):
     """Transcribe audio file with specified engine and model."""
 
-    # Validate engine and model
     if engine not in MODEL_REGISTRY or model_id not in MODEL_REGISTRY[engine]:
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
 
-    # Check if model is cached (required for transcription)
     if not stt_model_manager.is_model_cached(engine, model_id):
         raise HTTPException(
             status_code=400,
             detail=f"Model {engine}/{model_id} is not cached. Please download the model first.",
         )
 
-    # Check if model is currently downloading
     if websocket_manager.is_downloading(engine, model_id):
         raise HTTPException(
             status_code=400,
             detail=f"Model {engine}/{model_id} is currently downloading. Please wait for download to complete.",
         )
 
-    # Validate file format
     file_extension = file.filename.split(".")[-1].lower()
     if file_extension not in SUPPORTED_FORMATS:
         raise HTTPException(
@@ -337,7 +300,6 @@ async def transcribe_endpoint(
             detail=f"Unsupported file format. Supported: {SUPPORTED_FORMATS}",
         )
 
-    # Save uploaded file
     temp_dir = tempfile.gettempdir()
     audio_path = os.path.join(temp_dir, file.filename)
 
@@ -346,12 +308,10 @@ async def transcribe_endpoint(
             content = await file.read()
             buffer.write(content)
 
-        # Transcribe (model is guaranteed to be cached)
         result = await transcribe_audio(
             engine, audio_path, model_id, file.filename, len(content)
         )
 
-        # Schedule cleanup
         background_tasks.add_task(
             lambda: os.remove(audio_path) if os.path.exists(audio_path) else None
         )
@@ -359,7 +319,6 @@ async def transcribe_endpoint(
         return result
 
     except Exception as e:
-        # Cleanup on error
         if os.path.exists(audio_path):
             os.remove(audio_path)
         raise HTTPException(status_code=500, detail=str(e))
@@ -369,11 +328,10 @@ async def transcribe_endpoint(
 async def compare_models(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    engines: str = Form(...),  # JSON string of engine configs
+    engines: str = Form(...),
 ):
     """Compare multiple models on the same audio file."""
 
-    # Parse engines configuration
     try:
         engine_configs = json.loads(engines)
     except json.JSONDecodeError:
@@ -384,7 +342,6 @@ async def compare_models(
             status_code=400, detail="At least 2 models required for comparison"
         )
 
-    # Validate file format
     file_extension = file.filename.split(".")[-1].lower()
     if file_extension not in SUPPORTED_FORMATS:
         raise HTTPException(
@@ -392,7 +349,6 @@ async def compare_models(
             detail=f"Unsupported file format. Supported: {SUPPORTED_FORMATS}",
         )
 
-    # Save uploaded file
     temp_dir = tempfile.gettempdir()
     audio_path = os.path.join(temp_dir, file.filename)
 
@@ -401,13 +357,11 @@ async def compare_models(
             content = await file.read()
             buffer.write(content)
 
-        # Log comparison start
         comparison_start_time = time.time()
         transcription_logger.log_comparison_start(
             engine_configs, file.filename, len(content)
         )
 
-        # Run comparisons
         results = {}
         for config in engine_configs:
             engine = config.get("engine")
@@ -426,13 +380,11 @@ async def compare_models(
             )
             results[f"{engine}_{model_id}"] = result
 
-        # Log comparison completion
         comparison_time = time.time() - comparison_start_time
         transcription_logger.log_comparison_complete(
             engine_configs, file.filename, comparison_time, results
         )
 
-        # Schedule cleanup
         background_tasks.add_task(
             lambda: os.remove(audio_path) if os.path.exists(audio_path) else None
         )
@@ -440,7 +392,6 @@ async def compare_models(
         return {"results": results}
 
     except Exception as e:
-        # Cleanup on error
         if os.path.exists(audio_path):
             os.remove(audio_path)
         raise HTTPException(status_code=500, detail=str(e))
@@ -450,29 +401,23 @@ async def compare_models(
 async def delete_model_cache(engine: str, model_id: str):
     """Delete a cached model."""
 
-    # Validate engine and model
     if engine not in MODEL_REGISTRY or model_id not in MODEL_REGISTRY[engine]:
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
 
-    # Check if model is currently being used (downloading)
     if websocket_manager.is_downloading(engine, model_id):
         raise HTTPException(
             status_code=400, detail="Cannot delete model while it's being downloaded"
         )
 
-    # Check if model is actually cached
     if not stt_model_manager.is_model_cached(engine, model_id):
         raise HTTPException(status_code=404, detail="Model is not cached")
 
     try:
-        # Log the deletion attempt
         logger.info(f"Attempting to delete cached model: {engine}/{model_id}")
 
-        # Delete the model cache
         success = stt_model_manager.delete_model_cache(engine, model_id)
 
         if success:
-            # Log successful deletion
             transcription_logger.log_model_delete(engine, model_id, True)
 
             return {
@@ -480,7 +425,6 @@ async def delete_model_cache(engine: str, model_id: str):
                 "message": f"Model {engine}/{model_id} deleted successfully",
             }
         else:
-            # Log failed deletion
             transcription_logger.log_model_delete(
                 engine, model_id, False, "Failed to delete model cache"
             )
@@ -488,7 +432,6 @@ async def delete_model_cache(engine: str, model_id: str):
 
     except Exception as e:
         error_msg = str(e)
-        # Log failed deletion
         transcription_logger.log_model_delete(engine, model_id, False, error_msg)
         logger.error(f"Error deleting model cache {engine}/{model_id}: {e}")
         raise HTTPException(status_code=500, detail=error_msg)
@@ -550,7 +493,6 @@ async def download_transcription_csv(transcription_id: str):
                 status_code=404, detail="No transcription data available"
             )
 
-        # Convert to CSV format
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -560,8 +502,7 @@ async def download_transcription_csv(transcription_id: str):
         csv_content = output.getvalue()
         output.close()
 
-        # Create filename
-        timestamp = transcription["timestamp"][:10]  # YYYY-MM-DD
+        timestamp = transcription["timestamp"][:10]
         filename = f"transcription_{timestamp}_{transcription['engine']}_{transcription['model_id']}.csv"
 
         return Response(
@@ -577,289 +518,19 @@ async def download_transcription_csv(transcription_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================================
-# TTS (Text-to-Speech) API Endpoints
-# ============================================================================
-
-@app.get("/api/tts/models")
-async def get_tts_models():
-    """Get available TTS models."""
-    from config import TTS_MODEL_REGISTRY
-    
-    models = []
-    for engine, engine_models in TTS_MODEL_REGISTRY.items():
-        for model_id, config in engine_models.items():
-            is_cached = tts_model_manager.is_model_cached(engine, model_id)
-            is_downloading = websocket_manager.is_downloading(engine, model_id)
-            
-            models.append({
-                "engine": engine,
-                "model_id": model_id,
-                "display_name": tts_model_manager.get_display_name(engine, model_id),
-                "size": config["size"],
-                "cached": is_cached,
-                "downloading": is_downloading,
-                "languages": config.get("languages", []),
-                "speakers": config.get("speakers", {})
-            })
-    
-    return {"models": models}
-
-
-@app.post("/api/tts/download-model")
-async def download_tts_model(
-    background_tasks: BackgroundTasks,
-    engine: str = Form(...),
-    model_id: str = Form(...),
-):
-    """Start async TTS model download with WebSocket progress updates."""
-    from config import TTS_MODEL_REGISTRY
-    
-    logger.info(f"TTS download request received for {engine}/{model_id}")
-    
-    # Validate engine and model
-    if engine not in TTS_MODEL_REGISTRY or model_id not in TTS_MODEL_REGISTRY[engine]:
-        logger.error(f"Invalid TTS engine or model_id: {engine}/{model_id}")
-        raise HTTPException(status_code=400, detail="Invalid engine or model_id")
-    
-    # Check if already cached
-    if tts_model_manager.is_model_cached(engine, model_id):
-        logger.info(f"TTS Model {engine}/{model_id} already cached")
-        return {"success": True, "message": "Model already cached", "cached": True}
-    
-    # Check if already downloading
-    if websocket_manager.is_downloading(engine, model_id):
-        logger.info(f"TTS Model {engine}/{model_id} already downloading")
-        return {
-            "success": False,
-            "message": "Download already in progress",
-            "downloading": True,
-        }
-    
-    # Start download task in background
-    logger.info(f"Starting background download task for TTS {engine}/{model_id}")
-    background_tasks.add_task(websocket_manager.start_download_task, engine, model_id)
-    
-    return {
-        "success": True,
-        "message": "Download started",
-        "downloading": True,
-        "engine": engine,
-        "model_id": model_id,
-    }
-
-
-@app.post("/api/tts/synthesize")
-async def synthesize_endpoint(
-    background_tasks: BackgroundTasks,
-    text: str = Form(...),
-    engine: str = Form(...),
-    model_id: str = Form(...),
-    description: str = Form(None),
-    speaker: str = Form(None),
-    language: str = Form(None),
-):
-    """Synthesize speech from text with specified TTS engine and model."""
-    from config import TTS_MODEL_REGISTRY
-    from tts_synthesis_engine import synthesize_speech
-    import tempfile
-    import os
-    
-    # Validate engine and model
-    if engine not in TTS_MODEL_REGISTRY or model_id not in TTS_MODEL_REGISTRY[engine]:
-        raise HTTPException(status_code=400, detail="Invalid engine or model_id")
-    
-    # Check if model is cached
-    if not tts_model_manager.is_model_cached(engine, model_id):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model {engine}/{model_id} is not cached. Please download the model first.",
-        )
-    
-    # Check if model is currently downloading
-    if websocket_manager.is_downloading(engine, model_id):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Model {engine}/{model_id} is currently downloading. Please wait for download to complete.",
-        )
-    
-    # Create output file path
-    temp_dir = tempfile.gettempdir()
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_filename = f"tts_{engine}_{timestamp}.wav"
-    output_path = os.path.join(temp_dir, output_filename)
-    
-    try:
-        # Build voice description if speaker/language provided
-        if speaker and not description:
-            description = f"{speaker}'s voice"
-            if language:
-                description += f" speaking {language}"
-        
-        # Synthesize speech
-        result = await synthesize_speech(
-            engine=engine,
-            text=text,
-            model_id=model_id,
-            description=description,
-            output_path=output_path
-        )
-        
-        if not result["success"]:
-            raise HTTPException(status_code=500, detail=result.get("error", "Synthesis failed"))
-        
-        # Return the audio file
-        def cleanup():
-            if os.path.exists(output_path):
-                os.remove(output_path)
-        
-        background_tasks.add_task(cleanup)
-        
-        return FileResponse(
-            output_path,
-            media_type="audio/wav",
-            filename=output_filename,
-            headers={
-                "X-Audio-Duration": str(result["audio_duration"]),
-                "X-Processing-Time": str(result["processing_time"]),
-                "X-Sample-Rate": str(result["sample_rate"])
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Cleanup on error
-        if os.path.exists(output_path):
-            os.remove(output_path)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/api/tts/compare")
-async def compare_tts_models(
-    background_tasks: BackgroundTasks,
-    text: str = Form(...),
-    engines: str = Form(...),  # JSON string of engine configs
-):
-    """Compare multiple TTS models on the same text."""
-    from config import TTS_MODEL_REGISTRY
-    from tts_synthesis_engine import synthesize_speech
-    import tempfile
-    import os
-    import json
-    
-    # Parse engines configuration
-    try:
-        engine_configs = json.loads(engines)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=400, detail="Invalid engines configuration")
-    
-    if len(engine_configs) < 2:
-        raise HTTPException(
-            status_code=400, detail="At least 2 models required for comparison"
-        )
-    
-    try:
-        # Run comparisons
-        results = {}
-        temp_files = []
-        
-        for config in engine_configs:
-            engine = config.get("engine")
-            model_id = config.get("model_id")
-            description = config.get("description")
-            
-            if not engine or not model_id:
-                continue
-            
-            # Create output file
-            temp_dir = tempfile.gettempdir()
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"tts_compare_{engine}_{timestamp}.wav"
-            output_path = os.path.join(temp_dir, output_filename)
-            temp_files.append(output_path)
-            
-            result = await synthesize_speech(
-                engine=engine,
-                text=text,
-                model_id=model_id,
-                description=description,
-                output_path=output_path
-            )
-            
-            results[f"{engine}_{model_id}"] = {
-                **result,
-                "audio_file": output_filename
-            }
-        
-        # Schedule cleanup
-        def cleanup():
-            for file_path in temp_files:
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-        
-        background_tasks.add_task(cleanup)
-        
-        return {"results": results}
-        
-    except Exception as e:
-        # Cleanup on error
-        for file_path in temp_files:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/api/tts/models/{engine}/{model_id}")
-async def delete_tts_model_cache(engine: str, model_id: str):
-    """Delete a cached TTS model."""
-    from config import TTS_MODEL_REGISTRY
-    
-    # Validate engine and model
-    if engine not in TTS_MODEL_REGISTRY or model_id not in TTS_MODEL_REGISTRY[engine]:
-        raise HTTPException(status_code=400, detail="Invalid engine or model_id")
-    
-    # Check if model is currently being used
-    if websocket_manager.is_downloading(engine, model_id):
-        raise HTTPException(
-            status_code=400, detail="Cannot delete model while it's being downloaded"
-        )
-    
-    # Check if model is actually cached
-    if not tts_model_manager.is_model_cached(engine, model_id):
-        raise HTTPException(status_code=404, detail="Model is not cached")
-    
-    try:
-        logger.info(f"Attempting to delete cached TTS model: {engine}/{model_id}")
-        
-        success = tts_model_manager.delete_model_cache(engine, model_id)
-        
-        if success:
-            return {
-                "success": True,
-                "message": f"TTS Model {engine}/{model_id} deleted successfully",
-            }
-        else:
-            raise HTTPException(status_code=500, detail="Failed to delete model cache")
-            
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Error deleting TTS model cache {engine}/{model_id}: {e}")
-        raise HTTPException(status_code=500, detail=error_msg)
+# TTS endpoints are handled by the TTS service directly
+# Frontend service routes requests appropriately
 
 
 if __name__ == "__main__":
     import uvicorn
 
-    # Log startup information
     logger.info("=" * 50)
-    logger.info("VoxScribe Starting Up")
+    logger.info("VoxScribe STT Service Starting Up")
     logger.info("=" * 50)
     logger.info(f"Device: {DEVICE}")
     logger.info(f"Supported formats: {SUPPORTED_FORMATS}")
     logger.info(f"Base models directory: {BASE_MODELS_DIR}")
-    logger.info(f"Voxtral support: {_check_voxtral_support()}")
-    logger.info(f"NeMo support: {_check_nemo_support()}")
     logger.info("=" * 50)
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

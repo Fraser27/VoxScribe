@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Frontend Service (Node.js)
+  frontend:
+    build:
+      context: ./frontend-service
+      dockerfile: Dockerfile
+    container_name: voxscribe-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - STT_SERVICE_URL=http://stt:8001
+      - TTS_SERVICE_URL=http://tts:8002
+    depends_on:
+      - stt
+      - tts
+    networks:
+      - voxscribe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # STT Service (Python/FastAPI)
+  stt:
+    build:
+      context: ./stt-service
+      dockerfile: Dockerfile
+    container_name: voxscribe-stt
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./models/whisper:/app/models/whisper
+      - ./models/voxtral:/app/models/voxtral
+      - ./models/nvidia:/app/models/nvidia
+      - ./models/granite:/app/models/granite
+      - ./models/huggingface:/app/models/huggingface
+      - ./transcriptions:/app/transcriptions
+      - ./logs:/app/logs
+    environment:
+      - DEVICE=cuda
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - voxscribe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # TTS Service (Python/FastAPI)
+  tts:
+    build:
+      context: ./tts-service
+      dockerfile: Dockerfile
+    container_name: voxscribe-tts
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./models/parler:/app/models/parler
+      - ./models/higgs:/app/models/higgs
+      - ./models/huggingface:/app/models/huggingface
+      - ./logs:/app/logs
+    environment:
+      - DEVICE=cuda
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - voxscribe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  voxscribe-network:
+    driver: bridge
