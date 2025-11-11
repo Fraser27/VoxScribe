@@ -628,7 +628,7 @@ class VoxScribe {
         formData.append('model_id', modelId);
 
         try {
-            const response = await fetch('/api/transcribe', {
+            const response = await fetch('/api/stt/transcribe', {
                 method: 'POST',
                 body: formData
             });
@@ -698,8 +698,8 @@ class VoxScribe {
             formData.append('engine', engine);
             formData.append('model_id', model_id);
 
-            console.log('Sending download request to /api/download-model');
-            const response = await fetch('/api/download-model', {
+            console.log('Sending download request to /api/stt/download-model');
+            const response = await fetch('/api/stt/download-model', {
                 method: 'POST',
                 body: formData
             });
@@ -762,7 +762,7 @@ class VoxScribe {
         }))));
 
         try {
-            const response = await fetch('/api/compare', {
+            const response = await fetch('/api/stt/compare', {
                 method: 'POST',
                 body: formData
             });
@@ -926,7 +926,7 @@ class VoxScribe {
 
     async loadModels() {
         try {
-            const response = await fetch('/api/models');
+            const response = await fetch('/api/stt/models');
             const data = await response.json();
             this.availableModels = data.models;
             this.updateModelSelects();
@@ -1147,7 +1147,7 @@ class VoxScribe {
 
     async loadTranscriptionHistory() {
         try {
-            const response = await fetch('/api/transcriptions?limit=5');
+            const response = await fetch('/api/stt/transcriptions?limit=5');
             const data = await response.json();
 
             const historyContainer = document.getElementById('transcriptionHistoryList');
@@ -1206,7 +1206,7 @@ class VoxScribe {
 
     async loadFullTranscriptionHistory() {
         try {
-            const response = await fetch('/api/transcriptions?limit=50');
+            const response = await fetch('/api/stt/transcriptions?limit=50');
             const data = await response.json();
 
             const historyContent = document.getElementById('historyContent');
@@ -1278,7 +1278,7 @@ class VoxScribe {
             this.hideHistoryModal();
             this.showProgress('Loading transcription details...');
 
-            const response = await fetch(`/api/transcriptions/${transcriptionId}`);
+            const response = await fetch(`/api/stt/transcriptions/${transcriptionId}`);
             const transcription = await response.json();
 
             if (!response.ok) {
@@ -1380,7 +1380,7 @@ class VoxScribe {
         }
 
         try {
-            const response = await fetch(`/api/transcriptions/${this.currentTranscriptionId}/download`);
+            const response = await fetch(`/api/stt/transcriptions/${this.currentTranscriptionId}/download`);
 
             if (!response.ok) {
                 const error = await response.json();
@@ -1418,7 +1418,7 @@ class VoxScribe {
         }
 
         try {
-            const response = await fetch(`/api/transcriptions/${idToDelete}`, {
+            const response = await fetch(`/api/stt/transcriptions/${idToDelete}`, {
                 method: 'DELETE'
             });
 
@@ -1481,7 +1481,7 @@ class VoxScribe {
         try {
             this.showProgress('Deleting model cache...');
 
-            const response = await fetch(`/api/models/${encodeURIComponent(engine)}/${encodeURIComponent(modelId)}`, {
+            const response = await fetch(`/api/stt/models/${encodeURIComponent(engine)}/${encodeURIComponent(modelId)}`, {
                 method: 'DELETE'
             });
 

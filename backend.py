@@ -95,8 +95,8 @@ transcription_logger = TranscriptionLogger()
 transcription_manager = TranscriptionManager(TRANSCRIPTIONS_DIR)
 
 # Initialize model manager
-stt_manager = STTModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
-stt_manager.scan_existing_models()
+stt_model_manager = STTModelManager(MODEL_REGISTRY, BASE_MODELS_DIR)
+stt_model_manager.scan_existing_models()
 
 # Initialize TTS model manager
 from config import TTS_MODEL_REGISTRY
@@ -107,7 +107,7 @@ tts_model_manager.scan_existing_models()
 # Set the global manager instances
 from global_managers import set_managers
 set_managers(
-    stt_model_manager=stt_manager,
+    stt_model_manager=stt_model_manager,
     transcription_logger=transcription_logger,
     transcription_manager=transcription_manager,
     websocket_manager=websocket_manager,
@@ -236,21 +236,21 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_manager.disconnect(websocket)
 
 
-@app.get("/api/models")
+@app.get("/api/stt/models")
 async def get_models():
     """Get available models for all engines."""
     models = []
 
     for engine, engine_models in MODEL_REGISTRY.items():
         for model_id, config in engine_models.items():
-            is_cached = model_manager.is_model_cached(engine, model_id)
+            is_cached = stt_model_manager.is_model_cached(engine, model_id)
             is_downloading = websocket_manager.is_downloading(engine, model_id)
 
             models.append(
                 {
                     "engine": engine,
                     "model_id": model_id,
-                    "display_name": model_manager.get_display_name(engine, model_id),
+                    "display_name": stt_model_manager.get_display_name(engine, model_id),
                     "size": config["size"],
                     "cached": is_cached,
                     "downloading": is_downloading,
@@ -260,55 +260,7 @@ async def get_models():
     return {"models": models}
 
 
-@app.get("/api/test-download/{engine}/{model_id}")
-async def test_download(engine: str, model_id: str):
-    """Test endpoint to manually trigger download and check WebSocket flow."""
-    logger.info(f"Test download endpoint called for {engine}/{model_id}")
-
-    # Test WebSocket connection count
-    connection_count = len(websocket_manager.active_connections)
-    logger.info(f"Active WebSocket connections: {connection_count}")
-
-    # Test sending a message
-    await websocket_manager.send_download_progress(
-        engine, model_id, 0, "test", "Testing WebSocket connection"
-    )
-
-    return {
-        "message": "Test download triggered",
-        "websocket_connections": connection_count,
-        "engine": engine,
-        "model_id": model_id,
-    }
-
-
-@app.get("/api/download-status")
-async def get_download_status():
-    """Get current download status for all models."""
-    downloads = []
-    for task_key, task in websocket_manager.download_tasks.items():
-        if not task.done():
-            engine, model_id = task_key.split(":", 1)
-            model = None
-            for eng, models in MODEL_REGISTRY.items():
-                if eng == engine and model_id in models:
-                    model = {
-                        "engine": engine,
-                        "model_id": model_id,
-                        "display_name": model_manager.get_display_name(
-                            engine, model_id
-                        ),
-                        "size": models[model_id]["size"],
-                    }
-                    break
-
-            if model:
-                downloads.append(model)
-
-    return {"downloads": downloads}
-
-
-@app.post("/api/download-model")
+@app.post("/api/stt/download-model")
 async def download_model(
     background_tasks: BackgroundTasks,
     engine: str = Form(...),
@@ -324,7 +276,7 @@ async def download_model(
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
 
     # Check if already cached
-    if model_manager.is_model_cached(engine, model_id):
+    if stt_model_manager.is_model_cached(engine, model_id):
         logger.info(f"Model {engine}/{model_id} already cached")
         return {"success": True, "message": "Model already cached", "cached": True}
 
@@ -350,7 +302,7 @@ async def download_model(
     }
 
 
-@app.post("/api/transcribe")
+@app.post("/api/stt/transcribe")
 async def transcribe_endpoint(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -364,7 +316,7 @@ async def transcribe_endpoint(
         raise HTTPException(status_code=400, detail="Invalid engine or model_id")
 
     # Check if model is cached (required for transcription)
-    if not model_manager.is_model_cached(engine, model_id):
+    if not stt_model_manager.is_model_cached(engine, model_id):
         raise HTTPException(
             status_code=400,
             detail=f"Model {engine}/{model_id} is not cached. Please download the model first.",
@@ -413,7 +365,7 @@ async def transcribe_endpoint(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/compare")
+@app.post("/api/stt/compare")
 async def compare_models(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -494,7 +446,7 @@ async def compare_models(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/models/{engine}/{model_id}")
+@app.delete("/api/stt/models/{engine}/{model_id}")
 async def delete_model_cache(engine: str, model_id: str):
     """Delete a cached model."""
 
@@ -509,7 +461,7 @@ async def delete_model_cache(engine: str, model_id: str):
         )
 
     # Check if model is actually cached
-    if not model_manager.is_model_cached(engine, model_id):
+    if not stt_model_manager.is_model_cached(engine, model_id):
         raise HTTPException(status_code=404, detail="Model is not cached")
 
     try:
@@ -517,7 +469,7 @@ async def delete_model_cache(engine: str, model_id: str):
         logger.info(f"Attempting to delete cached model: {engine}/{model_id}")
 
         # Delete the model cache
-        success = model_manager.delete_model_cache(engine, model_id)
+        success = stt_model_manager.delete_model_cache(engine, model_id)
 
         if success:
             # Log successful deletion
@@ -542,7 +494,7 @@ async def delete_model_cache(engine: str, model_id: str):
         raise HTTPException(status_code=500, detail=error_msg)
 
 
-@app.get("/api/transcriptions")
+@app.get("/api/stt/transcriptions")
 async def get_transcriptions(limit: int = 50, offset: int = 0):
     """Get list of transcription history."""
     try:
@@ -555,7 +507,7 @@ async def get_transcriptions(limit: int = 50, offset: int = 0):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/transcriptions/{transcription_id}")
+@app.get("/api/stt/transcriptions/{transcription_id}")
 async def get_transcription(transcription_id: str):
     """Get a specific transcription by ID."""
     try:
@@ -570,7 +522,7 @@ async def get_transcription(transcription_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.delete("/api/transcriptions/{transcription_id}")
+@app.delete("/api/stt/transcriptions/{transcription_id}")
 async def delete_transcription(transcription_id: str):
     """Delete a transcription from history."""
     try:
@@ -585,7 +537,7 @@ async def delete_transcription(transcription_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/transcriptions/{transcription_id}/download")
+@app.get("/api/stt/transcriptions/{transcription_id}/download")
 async def download_transcription_csv(transcription_id: str):
     """Download transcription as CSV file."""
     try:
