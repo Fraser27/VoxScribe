@@ -13,7 +13,7 @@ class TTSLoaderFactory:
     """Factory for creating TTS model loaders."""
     
     _loaders: Dict[str, Type[BaseTTSLoader]] = {
-        # "parler": ParlerTTSLoader,
+        "parler": ParlerTTSLoader,
         "higgs": HiggsAudioLoader,
     }
     
