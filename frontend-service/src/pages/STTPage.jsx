@@ -80,13 +80,13 @@ const STTPage = () => {
     setResults(null);
 
     const formData = new FormData();
-    formData.append('audio', audioFile);
+    formData.append('file', audioFile);
     
     if (mode === 'single') {
       formData.append('engine', selectedEngine);
       formData.append('model_id', selectedModel);
     } else {
-      formData.append('models', JSON.stringify(selectedModels));
+      formData.append('engines', JSON.stringify(selectedModels));
     }
 
     try {

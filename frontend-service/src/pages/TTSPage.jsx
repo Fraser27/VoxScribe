@@ -51,26 +51,40 @@ const TTSPage = () => {
     setProgress(0);
     setResults(null);
 
+    const formData = new FormData();
+    formData.append('text', text);
+    formData.append('engine', selectedEngine);
+    formData.append('model_id', selectedModel);
+    
+    if (language) formData.append('language', language);
+    if (speaker) formData.append('speaker', speaker);
+    if (description) formData.append('description', description);
+
     try {
       const response = await fetch('/api/tts/synthesize', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          engine: selectedEngine,
-          model_id: selectedModel,
-          language: language || undefined,
-          speaker: speaker || undefined,
-          description: description || undefined
-        })
+        body: formData
       });
 
       if (!response.ok) {
         throw new Error('Synthesis failed');
       }
 
-      const data = await response.json();
-      setResults(data);
+      // The response is an audio file, create a blob URL
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      
+      // Get metadata from headers
+      const duration = parseFloat(response.headers.get('X-Audio-Duration') || '0');
+      const processingTime = parseFloat(response.headers.get('X-Processing-Time') || '0');
+      const sampleRate = parseInt(response.headers.get('X-Sample-Rate') || '0');
+      
+      setResults({
+        audio_url: audioUrl,
+        duration,
+        processing_time: processingTime,
+        sample_rate: sampleRate
+      });
     } catch (error) {
       console.error('Synthesis error:', error);
     } finally {
