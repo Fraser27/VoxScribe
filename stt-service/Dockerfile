@@ -14,7 +14,13 @@ RUN apt-get update && apt-get install -y \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Upgrade pip and install build tools
+RUN pip3 install --upgrade pip setuptools wheel
+
+# Install numpy first (required by sox and other packages)
+RUN pip3 install --no-cache-dir numpy>=1.20.0
+
+# Copy requirements and install remaining packages
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
