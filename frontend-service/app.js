@@ -861,7 +861,7 @@ class VoxScribe {
 
     async loadStatus() {
         try {
-            const response = await fetch('/api/status');
+            const response = await fetch('/api/stt/status');
             const status = await response.json();
 
             document.getElementById('deviceStatus').textContent = status.device;

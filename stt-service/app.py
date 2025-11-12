@@ -118,7 +118,7 @@ async def root():
     return {"service": "VoxScribe STT", "version": "1.0.0", "status": "running"}
 
 
-@app.get("/api/status")
+@app.get("/api/stt/status")
 async def get_status():
     """Get system and dependency status."""
     return {

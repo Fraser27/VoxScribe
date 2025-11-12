@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
+      '/api/logs': {
+        target: process.env.STT_SERVICE_URL || 'http://localhost:8001',
+        changeOrigin: true
+      },
       '/api/stt': {
         target: process.env.STT_SERVICE_URL || 'http://localhost:8001',
         changeOrigin: true
