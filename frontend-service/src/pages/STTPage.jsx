@@ -137,6 +137,7 @@ const STTPage = () => {
               onEngineChange={setSelectedEngine}
               onModelChange={setSelectedModel}
               onModelsChange={setSelectedModels}
+              onRefreshModels={loadModels}
             />
             
             <FileUpload
@@ -146,6 +147,10 @@ const STTPage = () => {
             
             <TranscriptionActions
               mode={mode}
+              models={models}
+              selectedEngine={selectedEngine}
+              selectedModel={selectedModel}
+              selectedModels={selectedModels}
               disabled={!audioFile || transcribing}
               onTranscribe={handleTranscribe}
             />

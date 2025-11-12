@@ -16,7 +16,8 @@ const ModelSelector = ({
   selectedModels,
   onEngineChange,
   onModelChange,
-  onModelsChange
+  onModelsChange,
+  onRefreshModels
 }) => {
   const [downloading, setDownloading] = useState({});
 
@@ -42,7 +43,7 @@ const ModelSelector = ({
     return models.find(m => m.engine === selectedEngine && m.model_id === selectedModel);
   }, [models, selectedEngine, selectedModel]);
 
-  const handleDownload = async (engine, modelId) => {
+  const handleDownload = async (engine, modelId, onRefresh) => {
     const key = `${engine}-${modelId}`;
     setDownloading(prev => ({ ...prev, [key]: true }));
 
@@ -60,7 +61,12 @@ const ModelSelector = ({
         throw new Error('Download failed');
       }
 
-      alert(`Download started for ${engine}/${modelId}. Check the progress in the UI.`);
+      alert(`Download started for ${engine}/${modelId}. The model will be available once download completes.`);
+      
+      // Refresh models list after a delay to check download status
+      if (onRefresh) {
+        setTimeout(() => onRefresh(), 2000);
+      }
     } catch (error) {
       console.error('Download error:', error);
       alert(`Failed to start download: ${error.message}`);
@@ -96,7 +102,7 @@ const ModelSelector = ({
             type="warning"
             action={
               <Button
-                onClick={() => handleDownload(selectedEngine, selectedModel)}
+                onClick={() => handleDownload(selectedEngine, selectedModel, onRefreshModels)}
                 loading={downloading[`${selectedEngine}-${selectedModel}`]}
               >
                 Download Model
@@ -140,7 +146,7 @@ const ModelSelector = ({
             {!model.cached && (
               <Button
                 variant="inline-link"
-                onClick={() => handleDownload(model.engine, model.model_id)}
+                onClick={() => handleDownload(model.engine, model.model_id, onRefreshModels)}
                 loading={downloading[`${model.engine}-${model.model_id}`]}
               >
                 Download
