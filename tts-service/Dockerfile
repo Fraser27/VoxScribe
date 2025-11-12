@@ -6,24 +6,27 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     python3.12 \
     python3-pip \
-    pipx \
+    python3-venv \
     ffmpeg \
     git \
-    curl
-# Upgrade pip and install build tools
-RUN pipx install --upgrade pip setuptools wheel
-# Install numpy first (required by sox and other packages)
-RUN pipx install --no-cache-dir numpy>=1.20.0
-
-RUN apt-get update && apt-get install -y \
+    curl \
     sox \
     libsox-dev \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Create virtual environment
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Upgrade pip and install build tools
+RUN pip install --upgrade pip setuptools wheel
+# Install numpy first (required by sox and other packages)
+RUN pip install --no-cache-dir numpy>=1.20.0
+
 # Copy requirements and install remaining packages
 COPY requirements.txt .
-RUN pipx install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
