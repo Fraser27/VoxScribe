@@ -38,7 +38,21 @@ const FileUpload = ({ audioFile, onFileSelect }) => {
         {audioFile && (
           <Box>
             <SpaceBetween size="xs">
-              <Box variant="strong">{audioFile.name}</Box>
+              <SpaceBetween size="xs" direction="horizontal">
+                <Box variant="strong">{audioFile.name}</Box>
+                <Button
+                  variant="inline-link"
+                  iconName="close"
+                  onClick={() => {
+                    onFileSelect(null);
+                    if (fileInputRef.current) {
+                      fileInputRef.current.value = '';
+                    }
+                  }}
+                >
+                  Remove
+                </Button>
+              </SpaceBetween>
               <Box variant="small">{formatFileSize(audioFile.size)}</Box>
               <audio controls src={URL.createObjectURL(audioFile)} style={{ width: '100%' }} />
             </SpaceBetween>
