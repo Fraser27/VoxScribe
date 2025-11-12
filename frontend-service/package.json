@@ -2,12 +2,11 @@
   "name": "voxscribe-frontend",
   "version": "2.0.0",
   "description": "VoxScribe Frontend - React + Cloudscape",
-  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node server.js"
+    "start": "node server.cjs"
   },
   "dependencies": {
     "@cloudscape-design/components": "^3.0.0",

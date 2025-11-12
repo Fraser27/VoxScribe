@@ -25,7 +25,7 @@ RUN apk add --no-cache wget
 
 # Copy package files for production server
 COPY package*.json ./
-COPY server.js ./
+COPY server.cjs ./
 
 # Install only production dependencies
 RUN npm install --production
