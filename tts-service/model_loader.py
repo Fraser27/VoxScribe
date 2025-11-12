@@ -31,12 +31,8 @@ def load_model(engine, model_id):
         model_manager = get_model_manager(mgr_type)
         
         # Get transcription logger if available (only for STT)
-        transcription_logger = None
-        try:
-            transcription_logger = get_transcription_logger()
-        except RuntimeError:
-            # Transcription logger not available (e.g., in TTS service)
-            pass
+        transcription_logger = get_transcription_logger()
+        
 
         # Get the appropriate loader factory based on manager type
         loader_factory = get_loader_factory(mgr_type)
@@ -47,18 +43,16 @@ def load_model(engine, model_id):
         # Check dependencies first
         is_supported, error_msg = loader.check_dependencies()
         if not is_supported:
-            if transcription_logger:
-                transcription_logger.log_dependency_error(
+            transcription_logger.log_dependency_error(
                     engine, model_id, loader.engine_name, error_msg
-                )
+            )
             raise Exception(error_msg)
 
         cache_dir = model_manager.get_cache_dir(engine, model_id)
         is_cached = model_manager.is_model_cached(engine, model_id)
 
         # Log model load start
-        if transcription_logger:
-            transcription_logger.log_model_load_start(engine, model_id, is_cached)
+        transcription_logger.log_model_load_start(engine, model_id, is_cached)
 
         # Setup cache environment if needed
         loader.setup_cache_environment(cache_dir)
@@ -75,8 +69,7 @@ def load_model(engine, model_id):
 
         # Log successful model load
         load_time = time.time() - load_start_time
-        if transcription_logger:
-            transcription_logger.log_model_load_complete(engine, model_id, load_time, True)
+        transcription_logger.log_model_load_complete(engine, model_id, load_time, True)
 
         return result
 

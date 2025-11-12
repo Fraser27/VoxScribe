@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Import our modular components
 from config import TTS_MODEL_REGISTRY, BASE_MODELS_DIR
+from transcription_logger import TranscriptionLogger
 from logger_setup import setup_logger
 from websocket_manager import WebSocketManager
 from tts_manager import TTSModelManager
