@@ -13,8 +13,18 @@ const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:8002';
 // Enable CORS
 app.use(cors());
 
-// Serve static files
-app.use(express.static(path.join(__dirname)));
+// Serve static files with proper MIME types
+app.use(express.static(path.join(__dirname), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html');
+    }
+  }
+}));
 
 // Proxy API requests to STT service
 app.use('/api/stt', createProxyMiddleware({
