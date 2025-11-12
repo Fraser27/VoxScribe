@@ -16,9 +16,9 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Check Docker Compose version
-if command -v docker-compose &> /dev/null; then
-    COMPOSE_CMD="docker-compose"
-    echo "✓ Using docker-compose"
+if command -v docker compose &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+    echo "✓ Using docker compose"
 elif docker compose version &> /dev/null; then
     COMPOSE_CMD="docker compose"
     echo "✓ Using docker compose (plugin)"

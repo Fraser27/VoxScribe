@@ -14,7 +14,8 @@ packaging>=21.0
 httpx>=0.24.0
 
 # Whisper dependencies
-openai-whisper>=20250625
+#openai-whisper>=20250625
+openai-whisper>=20240930
 
 # NeMo dependencies (Parakeet and Canary-Qwen)
 nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git

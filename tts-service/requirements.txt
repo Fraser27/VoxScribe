@@ -15,4 +15,4 @@ packaging>=21.0
 git+https://github.com/huggingface/parler-tts.git
 
 # Transformers for model loading
-transformers>=4.57.0
+transformers>=4.46.1
