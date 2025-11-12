@@ -1,4 +1,4 @@
-FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+FROM 13.0.2-cudnn-devel-ubuntu24.04
 
 WORKDIR /app
 
@@ -9,9 +9,18 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
     curl \
+    sox \
+    libsox-dev \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
+# Upgrade pip and install build tools
+RUN pip3 install --upgrade pip setuptools wheel
+
+# Install numpy first (required by various packages)
+RUN pip3 install --no-cache-dir numpy>=1.20.0
+
+# Copy requirements and install remaining packages
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
