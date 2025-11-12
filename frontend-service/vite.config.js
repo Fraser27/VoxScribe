@@ -18,8 +18,13 @@ export default defineConfig({
         target: process.env.TTS_SERVICE_URL || 'http://localhost:8002',
         changeOrigin: true
       },
-      '/ws': {
+      '/ws/stt': {
         target: process.env.STT_SERVICE_URL || 'http://localhost:8001',
+        ws: true,
+        changeOrigin: true
+      },
+      '/ws/tts': {
+        target: process.env.TTS_SERVICE_URL || 'http://localhost:8002',
         ws: true,
         changeOrigin: true
       }

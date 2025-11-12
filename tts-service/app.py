@@ -13,9 +13,12 @@ from fastapi import (
     HTTPException,
     BackgroundTasks,
     Form,
+    WebSocket,
+    WebSocketDisconnect,
 )
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+import json
 
 # Import our modular components
 from config import TTS_MODEL_REGISTRY, BASE_MODELS_DIR
@@ -67,6 +70,30 @@ async def root():
         "version": "1.0.0",
         "status": "running"
     }
+
+
+@app.websocket("/ws/tts")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time TTS updates."""
+    await websocket_manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            
+            try:
+                message = json.loads(data)
+                if message.get("type") == "ping":
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+                else:
+                    await websocket.send_json({"type": "pong", "message": "Connection active"})
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "pong", "message": "Connection active"})
+                
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        websocket_manager.disconnect(websocket)
 
 
 @app.get("/api/tts/models")

@@ -11,23 +11,26 @@ export const useWebSocket = () => {
 };
 
 export const WebSocketProvider = ({ children }) => {
-  const [ws, setWs] = useState(null);
+  const [wsStt, setWsStt] = useState(null);
+  const [wsTts, setWsTts] = useState(null);
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState([]);
   const reconnectTimeoutRef = useRef(null);
   const heartbeatIntervalRef = useRef(null);
 
-  const connect = () => {
+  const connectToService = (service) => {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const wsUrl = `${protocol}//${window.location.host}/ws/${service}`;
       
-      console.log('Attempting WebSocket connection to:', wsUrl);
+      console.log(`Attempting WebSocket connection to ${service}:`, wsUrl);
       const websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
-        console.log('WebSocket connected successfully');
-        setConnected(true);
+        console.log(`${service.toUpperCase()} WebSocket connected successfully`);
+        if (service === 'stt') {
+          setConnected(true);
+        }
         startHeartbeat(websocket);
       };
 
@@ -41,24 +44,30 @@ export const WebSocketProvider = ({ children }) => {
       };
 
       websocket.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
-        setConnected(false);
+        console.log(`${service.toUpperCase()} WebSocket disconnected:`, event.code, event.reason);
+        if (service === 'stt') {
+          setConnected(false);
+        }
         stopHeartbeat();
         // Only reconnect if not a normal closure
         if (event.code !== 1000) {
-          reconnectTimeoutRef.current = setTimeout(connect, 5000);
+          reconnectTimeoutRef.current = setTimeout(() => connectToService(service), 5000);
         }
       };
 
       websocket.onerror = (error) => {
-        console.warn('WebSocket error (this is normal if backend is not running):', error);
+        console.warn(`${service.toUpperCase()} WebSocket error (this is normal if backend is not running):`, error);
       };
 
-      setWs(websocket);
+      if (service === 'stt') {
+        setWsStt(websocket);
+      } else if (service === 'tts') {
+        setWsTts(websocket);
+      }
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      console.error(`Failed to create ${service.toUpperCase()} WebSocket:`, error);
       // Retry connection after delay
-      reconnectTimeoutRef.current = setTimeout(connect, 5000);
+      reconnectTimeoutRef.current = setTimeout(() => connectToService(service), 5000);
     }
   };
 
@@ -78,15 +87,20 @@ export const WebSocketProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    connect();
+    // Connect to both STT and TTS WebSocket services
+    connectToService('stt');
+    connectToService('tts');
 
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       stopHeartbeat();
-      if (ws) {
-        ws.close();
+      if (wsStt) {
+        wsStt.close();
+      }
+      if (wsTts) {
+        wsTts.close();
       }
     };
   }, []);
@@ -94,7 +108,7 @@ export const WebSocketProvider = ({ children }) => {
   const clearMessages = () => setMessages([]);
 
   return (
-    <WebSocketContext.Provider value={{ ws, connected, messages, clearMessages }}>
+    <WebSocketContext.Provider value={{ wsStt, wsTts, connected, messages, clearMessages }}>
       {children}
     </WebSocketContext.Provider>
   );

@@ -13,6 +13,16 @@ const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:8002';
 // Enable CORS
 app.use(cors());
 
+// Proxy /api/logs to STT service
+app.use('/api/logs', createProxyMiddleware({
+  target: STT_SERVICE_URL,
+  changeOrigin: true,
+  onError: (err, req, res) => {
+    console.error('Logs Proxy Error:', err);
+    res.status(503).json({ error: 'STT service unavailable' });
+  }
+}));
+
 // Proxy API requests to STT service
 app.use('/api/stt', createProxyMiddleware({
   target: STT_SERVICE_URL,
@@ -40,14 +50,35 @@ app.use('/api/tts', createProxyMiddleware({
 }));
 
 // WebSocket proxy for STT service
-app.use('/ws', createProxyMiddleware({
+const wsSttProxy = createProxyMiddleware({
   target: STT_SERVICE_URL,
   ws: true,
   changeOrigin: true,
+  logLevel: 'debug',
   onError: (err) => {
-    console.error('WebSocket Proxy Error:', err);
+    console.error('STT WebSocket Proxy Error:', err);
+  },
+  onProxyReqWs: (proxyReq, req, socket) => {
+    console.log('STT WebSocket proxying to:', STT_SERVICE_URL);
   }
-}));
+});
+
+// WebSocket proxy for TTS service
+const wsTtsProxy = createProxyMiddleware({
+  target: TTS_SERVICE_URL,
+  ws: true,
+  changeOrigin: true,
+  logLevel: 'debug',
+  onError: (err) => {
+    console.error('TTS WebSocket Proxy Error:', err);
+  },
+  onProxyReqWs: (proxyReq, req, socket) => {
+    console.log('TTS WebSocket proxying to:', TTS_SERVICE_URL);
+  }
+});
+
+app.use('/ws/stt', wsSttProxy);
+app.use('/ws/tts', wsTtsProxy);
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -72,7 +103,14 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
 });
 
-// Handle WebSocket upgrade
-server.on('upgrade', () => {
-  console.log('WebSocket upgrade request received');
+// Handle WebSocket upgrade - forward to appropriate proxy
+server.on('upgrade', (req, socket, head) => {
+  console.log('WebSocket upgrade request received for:', req.url);
+  if (req.url.startsWith('/ws/stt')) {
+    wsSttProxy.upgrade(req, socket, head);
+  } else if (req.url.startsWith('/ws/tts')) {
+    wsTtsProxy.upgrade(req, socket, head);
+  } else {
+    socket.destroy();
+  }
 });

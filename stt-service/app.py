@@ -121,9 +121,18 @@ async def root():
 @app.get("/api/stt/status")
 async def get_status():
     """Get system and dependency status."""
+    # Count cached models
+    cached_models = 0
+    for engine, engine_models in MODEL_REGISTRY.items():
+        for model_id in engine_models.keys():
+            if stt_model_manager.is_model_cached(engine, model_id):
+                cached_models += 1
+    
     return {
         "device": DEVICE,
         "supported_formats": SUPPORTED_FORMATS,
+        "models_loaded": cached_models,
+        "dependencies_ready": True,
         "dependencies": {
             "voxtral_supported": _check_voxtral_support(),
             "nemo_supported": _check_nemo_support(),
@@ -181,7 +190,7 @@ async def get_logs(log_type: str = "transcriptions", limit: int = 100):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.websocket("/ws")
+@app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time updates."""
     await websocket_manager.connect(websocket)
