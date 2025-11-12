@@ -97,10 +97,16 @@ const STTPage = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Transcription failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
+
+      const data = await response.json();
+      setResults(data);
+      setTranscribing(false);
     } catch (error) {
       console.error('Transcription error:', error);
+      alert(`Transcription failed: ${error.message}`);
       setTranscribing(false);
     }
   };

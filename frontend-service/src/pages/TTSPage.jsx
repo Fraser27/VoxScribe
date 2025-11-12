@@ -67,7 +67,8 @@ const TTSPage = () => {
       });
 
       if (!response.ok) {
-        throw new Error('Synthesis failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
       }
 
       // The response is an audio file, create a blob URL
@@ -85,9 +86,10 @@ const TTSPage = () => {
         processing_time: processingTime,
         sample_rate: sampleRate
       });
+      setSynthesizing(false);
     } catch (error) {
       console.error('Synthesis error:', error);
-    } finally {
+      alert(`Synthesis failed: ${error.message}`);
       setSynthesizing(false);
     }
   };

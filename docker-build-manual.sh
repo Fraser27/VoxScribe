@@ -23,12 +23,12 @@ docker build -t voxscribe-frontend:latest ./frontend-service
 # Build STT
 echo ""
 echo "Building STT service..."
-docker build -t voxscribe-stt:latest ./stt-service
+docker build --no-cache -t voxscribe-stt:latest ./stt-service
 
 # Build TTS
 echo ""
 echo "Building TTS service..."
-docker build -t voxscribe-tts:latest ./tts-service
+docker build --no-cache -t voxscribe-tts:latest ./tts-service
 
 echo ""
 echo "=========================================="
