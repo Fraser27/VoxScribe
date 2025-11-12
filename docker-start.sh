@@ -15,8 +15,14 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Check if Docker Compose is installed
-if ! command -v docker compose &> /dev/null; then
+# Check Docker Compose version
+if command -v docker-compose &> /dev/null; then
+    COMPOSE_CMD="docker-compose"
+    echo "✓ Using docker-compose"
+elif docker compose version &> /dev/null; then
+    COMPOSE_CMD="docker compose"
+    echo "✓ Using docker compose (plugin)"
+else
     echo "❌ Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
@@ -38,18 +44,31 @@ mkdir -p transcriptions logs
 
 echo ""
 echo "Building Docker images..."
-docker compose build
+echo "This may take 10-15 minutes on first run..."
+
+# Build images one by one for better compatibility
+echo ""
+echo "Building frontend service..."
+$COMPOSE_CMD build frontend
+
+echo ""
+echo "Building STT service..."
+$COMPOSE_CMD build stt
+
+echo ""
+echo "Building TTS service..."
+$COMPOSE_CMD build tts
 
 echo ""
 echo "Starting services..."
-docker compose up -d
+$COMPOSE_CMD up -d
 
 echo ""
 echo "Waiting for services to start..."
 sleep 10
 
 # Check if services are running
-if docker compose ps | grep -q "Up"; then
+if $COMPOSE_CMD ps | grep -q "Up"; then
     echo ""
     echo "=========================================="
     echo "✓ VoxScribe is running!"
@@ -61,17 +80,21 @@ if docker compose ps | grep -q "Up"; then
     echo "  TTS API: http://localhost:8002"
     echo ""
     echo "Useful commands:"
-    echo "  make logs          - View all logs"
-    echo "  make logs-frontend - View frontend logs"
-    echo "  make logs-stt      - View STT logs"
-    echo "  make logs-tts      - View TTS logs"
-    echo "  make ps            - Show service status"
-    echo "  make down          - Stop services"
-    echo "  make test          - Test all services"
+    echo "  View logs: $COMPOSE_CMD logs -f"
+    echo "  View frontend logs: $COMPOSE_CMD logs -f frontend"
+    echo "  View STT logs: $COMPOSE_CMD logs -f stt"
+    echo "  View TTS logs: $COMPOSE_CMD logs -f tts"
+    echo "  Stop services: $COMPOSE_CMD down"
+    echo "  Restart: $COMPOSE_CMD restart"
+    echo ""
+    echo "Or use the Makefile:"
+    echo "  make logs    - View all logs"
+    echo "  make ps      - Show service status"
+    echo "  make down    - Stop services"
     echo ""
 else
     echo ""
     echo "❌ Services failed to start. Check logs:"
-    echo "  docker compose logs"
+    echo "  $COMPOSE_CMD logs"
     exit 1
 fi
