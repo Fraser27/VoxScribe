@@ -18,6 +18,19 @@ const TranscriptionResults = ({ results, mode }) => {
   if (mode === 'single') {
     const transcriptionText = results.text || extractText(results.csv_data);
     
+    // Parse csv_data for timestamped segments
+    const segments = useMemo(() => {
+      if (!results.csv_data || results.csv_data.length <= 1) return [];
+      const headers = results.csv_data[0];
+      return results.csv_data.slice(1).map(row => {
+        const segment = {};
+        headers.forEach((header, idx) => {
+          segment[header] = row[idx];
+        });
+        return segment;
+      });
+    }, [results.csv_data]);
+    
     return (
       <Container header={<Header variant="h2">Transcription Result</Header>}>
         <ColumnLayout columns={3} variant="text-grid">
@@ -34,10 +47,26 @@ const TranscriptionResults = ({ results, mode }) => {
             <Box>{results.rtfx?.toFixed(2)}x</Box>
           </div>
         </ColumnLayout>
+        
         <Box margin={{ top: 'l' }}>
-          <Box variant="awsui-key-label">Transcription</Box>
+          <Box variant="awsui-key-label">Full Transcription</Box>
           <Box padding={{ top: 's' }}>{transcriptionText}</Box>
         </Box>
+
+        {segments.length > 0 && (
+          <Box margin={{ top: 'l' }}>
+            <Table
+              columnDefinitions={[
+                { header: 'Time', cell: item => `${item['From (time)']} - ${item['To (time)']}`, width: 180 },
+                { header: 'Duration', cell: item => `${item.Duration}s`, width: 100 },
+                { header: 'Transcription', cell: item => item.Transcription }
+              ]}
+              items={segments}
+              variant="embedded"
+              header={<Header variant="h3">Timestamped Segments</Header>}
+            />
+          </Box>
+        )}
       </Container>
     );
   }
