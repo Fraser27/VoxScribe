@@ -44,7 +44,7 @@ logger = setup_logger()
 
 # Initialize WebSocket manager (for download progress)
 websocket_manager = WebSocketManager()
-
+transcription_logger = TranscriptionLogger()
 # Initialize TTS model manager
 tts_model_manager = TTSModelManager(TTS_MODEL_REGISTRY, BASE_MODELS_DIR)
 tts_model_manager.scan_existing_models()
@@ -53,6 +53,7 @@ tts_model_manager.scan_existing_models()
 from global_managers import set_managers
 set_managers(
     tts_model_manager=tts_model_manager,
+    transcription_logger=transcription_logger,
     websocket_manager=websocket_manager,
 )
 

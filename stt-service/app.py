@@ -86,8 +86,6 @@ websocket_manager = WebSocketManager()
 
 # Initialize transcription logger
 transcription_logger = TranscriptionLogger()
-
-# Initialize transcription manager
 transcription_manager = TranscriptionManager(TRANSCRIPTIONS_DIR)
 
 # Initialize model manager
