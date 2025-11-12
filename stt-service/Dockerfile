@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     git \
     curl \
+    sox \
+    libsox-dev \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install
