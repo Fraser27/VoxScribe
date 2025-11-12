@@ -17,12 +17,17 @@ def get_managers():
 
 def get_model_manager(mgr_type:str):
     """Get the global model manager instance."""
-    if "stt_model_manager" not in _managers or "tts_model_manager" not in _managers:
-        raise RuntimeError("Model manager not initialized. Call set_managers() first.")
     if mgr_type=="stt":
+        if "stt_model_manager" not in _managers:
+            raise RuntimeError("STT model manager not initialized. Call set_managers() first.")
         return _managers["stt_model_manager"]
     elif mgr_type=="tts":
+        if "tts_model_manager" not in _managers:
+            raise RuntimeError("TTS model manager not initialized. Call set_managers() first.")
         return _managers["tts_model_manager"]
+    else:
+        raise ValueError(f"Invalid manager type: {mgr_type}. Must be 'stt' or 'tts'")
+
 
 def get_transcription_logger():
     """Get the global transcription logger instance."""
