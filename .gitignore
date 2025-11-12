@@ -1,3 +1,5 @@
 *.md
 .vscode/settings.json
 /examples
+frontend-service/node_modules
+frontend-service/legacy-backup

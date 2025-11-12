@@ -13,19 +13,6 @@ const TTS_SERVICE_URL = process.env.TTS_SERVICE_URL || 'http://localhost:8002';
 // Enable CORS
 app.use(cors());
 
-// Serve static files with proper MIME types
-app.use(express.static(path.join(__dirname), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (filePath.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    } else if (filePath.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html');
-    }
-  }
-}));
-
 // Proxy API requests to STT service
 app.use('/api/stt', createProxyMiddleware({
   target: STT_SERVICE_URL,
@@ -62,22 +49,30 @@ app.use('/ws', createProxyMiddleware({
   }
 }));
 
+// Serve static files from dist directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'frontend' });
 });
 
-// Serve index.html for root
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+// Serve index.html for all other routes (SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('='.repeat(50));
-  console.log('VoxScribe Frontend Service');
+  console.log('VoxScribe Frontend Service (React + Cloudscape)');
   console.log('='.repeat(50));
   console.log(`Server running on: http://0.0.0.0:${PORT}`);
   console.log(`STT Service: ${STT_SERVICE_URL}`);
   console.log(`TTS Service: ${TTS_SERVICE_URL}`);
   console.log('='.repeat(50));
+});
+
+// Handle WebSocket upgrade
+server.on('upgrade', (request, socket, head) => {
+  console.log('WebSocket upgrade request received');
 });
