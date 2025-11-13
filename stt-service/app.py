@@ -214,6 +214,122 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_manager.disconnect(websocket)
 
 
+@app.websocket("/ws/stt/stream")
+async def stt_stream_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for streaming STT transcription"""
+    await websocket.accept()
+    
+    engine = None
+    model_id = None
+    audio_buffer = []
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            msg_type = message.get("type")
+            
+            if msg_type == "configure":
+                engine = message.get("engine")
+                model_id = message.get("model_id")
+                
+                if engine not in MODEL_REGISTRY or model_id not in MODEL_REGISTRY[engine]:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Invalid engine or model_id"
+                    })
+                    continue
+                
+                if not stt_model_manager.is_model_cached(engine, model_id):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Model {engine}/{model_id} not cached"
+                    })
+                    continue
+                
+                await websocket.send_json({
+                    "type": "configured",
+                    "engine": engine,
+                    "model_id": model_id
+                })
+            
+            elif msg_type == "audio_data":
+                if not engine or not model_id:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Must configure before sending audio"
+                    })
+                    continue
+                
+                audio_data = message.get("data")
+                if audio_data:
+                    import base64
+                    audio_bytes = base64.b64decode(audio_data)
+                    audio_buffer.append(audio_bytes)
+            
+            elif msg_type == "finalize":
+                if not audio_buffer:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "No audio data to transcribe"
+                    })
+                    continue
+                
+                # Concatenate audio buffer
+                full_audio = b"".join(audio_buffer)
+                
+                # Save to temp file
+                temp_dir = tempfile.gettempdir()
+                audio_path = os.path.join(temp_dir, f"stream_{time.time()}.wav")
+                
+                try:
+                    # Write audio to file
+                    with open(audio_path, "wb") as f:
+                        f.write(full_audio)
+                    
+                    # Transcribe
+                    result = await transcribe_audio(
+                        engine, audio_path, model_id, "stream.wav", len(full_audio)
+                    )
+                    
+                    # Send transcription
+                    await websocket.send_json({
+                        "type": "transcription",
+                        "text": result.get("transcription", ""),
+                        "processing_time": result.get("processing_time", 0)
+                    })
+                    
+                    # Cleanup
+                    if os.path.exists(audio_path):
+                        os.remove(audio_path)
+                    
+                    audio_buffer = []
+                    
+                except Exception as e:
+                    logger.error(f"Error in streaming transcription: {e}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": str(e)
+                    })
+                    if os.path.exists(audio_path):
+                        os.remove(audio_path)
+            
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {msg_type}"
+                })
+    
+    except WebSocketDisconnect:
+        logger.info("STT stream client disconnected")
+    except Exception as e:
+        logger.error(f"STT stream error: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": str(e)
+        })
+
+
 @app.get("/api/stt/models")
 async def get_models():
     """Get available STT models."""

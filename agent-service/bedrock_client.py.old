@@ -1,0 +1,90 @@
+"""
+AWS Bedrock client for streaming LLM responses
+"""
+import boto3
+import json
+from typing import List, Dict, AsyncGenerator
+from config import AWS_REGION, BEDROCK_MODEL_ID, SYSTEM_PROMPT
+
+
+class BedrockClient:
+    def __init__(self):
+        self.client = boto3.client('bedrock-runtime', region_name=AWS_REGION)
+        self.model_id = BEDROCK_MODEL_ID
+        self.system_prompt = SYSTEM_PROMPT
+    
+    async def stream_response(
+        self,
+        user_message: str,
+        conversation_history: List[Dict[str, str]]
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream response from Bedrock Nova Lite
+        
+        Args:
+            user_message: Current user message
+            conversation_history: List of previous messages [{"role": "user/assistant", "content": "..."}]
+        
+        Yields:
+            Text chunks from the LLM
+        """
+        # Build messages array
+        messages = []
+        
+        # Add conversation history (limit to recent messages)
+        for msg in conversation_history:
+            messages.append({
+                "role": msg["role"],
+                "content": [{"text": msg["content"]}]
+            })
+        
+        # Add current user message
+        messages.append({
+            "role": "user",
+            "content": [{"text": user_message}]
+        })
+        
+        try:
+            # Call Bedrock with streaming
+            response = self.client.converse_stream(
+                modelId=self.model_id,
+                messages=messages,
+                system=[{"text": self.system_prompt}],
+                inferenceConfig={
+                    "maxTokens": 512,
+                    "temperature": 0.7,
+                    "topP": 0.9
+                }
+            )
+            
+            # Stream the response
+            full_response = ""
+            for event in response['stream']:
+                if 'contentBlockDelta' in event:
+                    delta = event['contentBlockDelta']['delta']
+                    if 'text' in delta:
+                        chunk = delta['text']
+                        full_response += chunk
+                        yield chunk
+                
+                elif 'messageStop' in event:
+                    # Message complete
+                    break
+            
+            # Return full response for history
+            return full_response
+            
+        except Exception as e:
+            error_msg = f"Bedrock error: {str(e)}"
+            print(f"Error in stream_response: {error_msg}")
+            yield f"I apologize, but I encountered an error: {error_msg}"
+    
+    def format_conversation_history(
+        self,
+        history: List[Dict[str, str]],
+        max_messages: int = 10
+    ) -> List[Dict[str, str]]:
+        """Format and limit conversation history"""
+        # Take only the most recent messages
+        recent_history = history[-max_messages:] if len(history) > max_messages else history
+        return recent_history

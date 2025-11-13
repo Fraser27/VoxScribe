@@ -96,6 +96,152 @@ async def websocket_endpoint(websocket: WebSocket):
         websocket_manager.disconnect(websocket)
 
 
+@app.websocket("/ws/tts/stream")
+async def tts_stream_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for streaming TTS synthesis"""
+    await websocket.accept()
+    
+    engine = None
+    model_id = None
+    description = None
+    
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            msg_type = message.get("type")
+            
+            if msg_type == "configure":
+                engine = message.get("engine")
+                model_id = message.get("model_id")
+                description = message.get("description", "A clear, friendly voice")
+                
+                if engine not in TTS_MODEL_REGISTRY or model_id not in TTS_MODEL_REGISTRY[engine]:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Invalid engine or model_id"
+                    })
+                    continue
+                
+                if not tts_model_manager.is_model_cached(engine, model_id):
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Model {engine}/{model_id} not cached"
+                    })
+                    continue
+                
+                await websocket.send_json({
+                    "type": "configured",
+                    "engine": engine,
+                    "model_id": model_id
+                })
+            
+            elif msg_type == "text":
+                if not engine or not model_id:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "Must configure before sending text"
+                    })
+                    continue
+                
+                text = message.get("text", "")
+                if not text:
+                    continue
+                
+                # Store text for synthesis
+                text_to_synthesize = text
+            
+            elif msg_type == "finalize":
+                if not text_to_synthesize:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "No text to synthesize"
+                    })
+                    continue
+                
+                # Generate audio
+                temp_dir = tempfile.gettempdir()
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = os.path.join(temp_dir, f"tts_stream_{timestamp}.wav")
+                
+                try:
+                    from tts_synthesis_engine import synthesize_speech
+                    
+                    result = await synthesize_speech(
+                        engine=engine,
+                        text=text_to_synthesize,
+                        model_id=model_id,
+                        description=description,
+                        output_path=output_path
+                    )
+                    
+                    if not result["success"]:
+                        await websocket.send_json({
+                            "type": "error",
+                            "message": result.get("error", "Synthesis failed")
+                        })
+                        continue
+                    
+                    # Read audio file and send in chunks
+                    with open(output_path, "rb") as f:
+                        audio_data = f.read()
+                    
+                    import base64
+                    
+                    # Send audio in chunks (e.g., 4KB chunks)
+                    chunk_size = 4096
+                    chunk_index = 0
+                    
+                    for i in range(0, len(audio_data), chunk_size):
+                        chunk = audio_data[i:i + chunk_size]
+                        chunk_base64 = base64.b64encode(chunk).decode('utf-8')
+                        
+                        await websocket.send_json({
+                            "type": "audio_chunk",
+                            "data": chunk_base64,
+                            "chunk_index": chunk_index
+                        })
+                        chunk_index += 1
+                    
+                    # Send completion
+                    await websocket.send_json({
+                        "type": "audio_complete",
+                        "total_chunks": chunk_index,
+                        "duration": result.get("audio_duration", 0),
+                        "sample_rate": result.get("sample_rate", 24000)
+                    })
+                    
+                    # Cleanup
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                    
+                    text_to_synthesize = ""
+                    
+                except Exception as e:
+                    logger.error(f"Error in streaming TTS: {e}")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": str(e)
+                    })
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+            
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {msg_type}"
+                })
+    
+    except WebSocketDisconnect:
+        logger.info("TTS stream client disconnected")
+    except Exception as e:
+        logger.error(f"TTS stream error: {e}")
+        await websocket.send_json({
+            "type": "error",
+            "message": str(e)
+        })
+
+
 @app.get("/api/tts/models")
 async def get_tts_models():
     """Get available TTS models."""

@@ -3,3 +3,21 @@
 /examples
 frontend-service/node_modules
 frontend-service/legacy-backup
+
+# Environment variables
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Logs
+*.log
+logs/
+
+# Agent session memory
+agent-service/session_memory/

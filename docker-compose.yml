@@ -11,9 +11,12 @@ services:
     environment:
       - STT_SERVICE_URL=http://stt:8001
       - TTS_SERVICE_URL=http://tts:8002
+      - AGENT_SERVICE_URL=http://agent:8003
+      - VITE_AGENT_SERVICE_URL=ws://localhost:8003
     depends_on:
       - stt
       - tts
+      - agent
     networks:
       - voxscribe-network
     restart: unless-stopped
@@ -61,6 +64,39 @@ services:
       - voxscribe-network
     restart: unless-stopped
 
+  # Agent Service (Python/FastAPI with Strands Agents)
+  agent:
+    build: ./agent-service
+    image: voxscribe-agent:latest
+    container_name: voxscribe-agent
+    ports:
+      - "8003:8003"
+    volumes:
+      - agent-sessions:/app/session_memory
+    environment:
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - BEDROCK_MODEL_ID=us.amazon.nova-lite-v1:0
+      - STT_SERVICE_URL=http://stt:8001
+      - TTS_SERVICE_URL=http://tts:8002
+      - MEMORY_STORAGE_PATH=/app/session_memory
+      - LLM_PROVIDER=bedrock
+      - LLM_TEMPERATURE=0.7
+      - LLM_MAX_TOKENS=512
+      - LLM_TOP_P=0.9
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - stt
+      - tts
+    networks:
+      - voxscribe-network
+    restart: unless-stopped
+
 networks:
   voxscribe-network:
     driver: bridge
+
+volumes:
+  agent-sessions:
+    driver: local

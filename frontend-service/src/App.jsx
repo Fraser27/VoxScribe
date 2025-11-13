@@ -6,6 +6,7 @@ import SideNavigation from '@cloudscape-design/components/side-navigation';
 import STTPage from './pages/STTPage';
 import TTSPage from './pages/TTSPage';
 import ModelCatalogPage from './pages/ModelCatalogPage';
+import VoiceAgentPage from './pages/VoiceAgentPage';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 
 function App() {
@@ -14,6 +15,13 @@ function App() {
   const [navigationOpen, setNavigationOpen] = useState(true);
 
   const navItems = [
+    {
+      type: 'section',
+      text: 'Voice Agent',
+      items: [
+        { type: 'link', text: 'Voice Agent', href: '/voice-agent' }
+      ]
+    },
     {
       type: 'section',
       text: 'Speech Services',
@@ -68,7 +76,8 @@ function App() {
         }
         content={
           <Routes>
-            <Route path="/" element={<Navigate to="/stt" replace />} />
+            <Route path="/" element={<Navigate to="/voice-agent" replace />} />
+            <Route path="/voice-agent" element={<VoiceAgentPage />} />
             <Route path="/stt" element={<STTPage />} />
             <Route path="/tts" element={<TTSPage />} />
             <Route path="/models" element={<ModelCatalogPage />} />

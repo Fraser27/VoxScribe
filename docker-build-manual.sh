@@ -30,10 +30,21 @@ echo ""
 echo "Building TTS service..."
 docker build --no-cache -t voxscribe-tts:latest ./tts-service
 
+# Build Agent
+echo ""
+echo "Building Agent service..."
+docker build --no-cache -t voxscribe-agent:latest ./agent-service
+
 echo ""
 echo "=========================================="
 echo "✓ All images built successfully!"
 echo "=========================================="
+echo ""
+echo "Images built:"
+echo "  - voxscribe-frontend:latest"
+echo "  - voxscribe-stt:latest"
+echo "  - voxscribe-tts:latest"
+echo "  - voxscribe-agent:latest"
 echo ""
 echo "Now start the services with:"
 echo "  docker-compose up -d"
