@@ -95,6 +95,24 @@ TTS_MODEL_REGISTRY = {
                 "Spanish": ["Steven", "Olivia", "Megan"],
                 "Dutch": ["Mark", "Jessica", "Michelle"]
             }
+        },
+        "parler-tts/parler-tts-mini-v1.1": {
+            "size": "1.2GB",
+            "cache_dir": BASE_MODELS_DIR / "parler" / "mini-v1.1",
+            "display_name": "Parler-TTS Mini v1.1",
+            "languages": ["English"],
+            "speakers": {
+                "English": ["Steven", "Olivia", "Megan"]
+            }
+        },
+        "parler-tts/parler-tts-large-v1": {
+            "size": "1.2GB",
+            "cache_dir": BASE_MODELS_DIR / "parler" / "large-v1",
+            "display_name": "Parler-TTS Large V1",
+            "languages": ["English"],
+            "speakers": {
+                "English": ["Steven", "Olivia", "Megan"]
+            }
         }
     },
     "higgs": {
