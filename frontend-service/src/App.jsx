@@ -5,6 +5,7 @@ import TopNavigation from '@cloudscape-design/components/top-navigation';
 import SideNavigation from '@cloudscape-design/components/side-navigation';
 import STTPage from './pages/STTPage';
 import TTSPage from './pages/TTSPage';
+import ModelCatalogPage from './pages/ModelCatalogPage';
 import { WebSocketProvider } from './contexts/WebSocketContext';
 
 function App() {
@@ -19,6 +20,13 @@ function App() {
       items: [
         { type: 'link', text: 'Speech-to-Text', href: '/stt' },
         { type: 'link', text: 'Text-to-Speech', href: '/tts' }
+      ]
+    },
+    {
+      type: 'section',
+      text: 'Management',
+      items: [
+        { type: 'link', text: 'Model Catalog', href: '/models' }
       ]
     }
   ];
@@ -63,6 +71,7 @@ function App() {
             <Route path="/" element={<Navigate to="/stt" replace />} />
             <Route path="/stt" element={<STTPage />} />
             <Route path="/tts" element={<TTSPage />} />
+            <Route path="/models" element={<ModelCatalogPage />} />
           </Routes>
         }
         toolsHide

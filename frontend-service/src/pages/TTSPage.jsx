@@ -127,7 +127,10 @@ const TTSPage = () => {
         processing_time: processingTime,
         sample_rate: sampleRate
       });
-      setSynthesizing(false);
+      setTimeout(() => {
+        setSynthesizing(false);  
+      }, 3000);
+      
     } catch (error) {
       console.error('Synthesis error:', error);
       alert(`Synthesis failed: ${error.message}`);
@@ -158,7 +161,7 @@ const TTSPage = () => {
               onEngineChange={setSelectedEngine}
               onModelChange={setSelectedModel}
             />
-            
+
             {downloading && (
           <Container header={<Header variant="h2">Downloading Model</Header>}>
             <SpaceBetween size="s">
