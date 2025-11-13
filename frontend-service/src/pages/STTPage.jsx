@@ -12,6 +12,7 @@ import TranscriptionResults from '../components/stt/TranscriptionResults';
 import StatusBar from '../components/common/StatusBar';
 import ServiceStatus from '../components/common/ServiceStatus';
 import { useWebSocket } from '../contexts/WebSocketContext';
+import DownloadProgress from '../components/common/DownloadProgress';
 
 const STTPage = () => {
   const [mode, setMode] = useState('single');
@@ -168,8 +169,7 @@ const STTPage = () => {
             {downloading && (
             <Container header={<Header variant="h2">Downloading Model</Header>}>
                <SpaceBetween size="s">
-                <TranscriptionProgress progress={downloadProgress} />
-                {downloadMessage && <div>{downloadMessage}</div>}
+                <DownloadProgress progress={downloadProgress} message={downloadMessage} />
               </SpaceBetween>
             </Container>
             )}
