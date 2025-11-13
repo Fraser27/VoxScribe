@@ -159,6 +159,14 @@ const TTSPage = () => {
               onModelChange={setSelectedModel}
             />
             
+            {downloading && (
+          <Container header={<Header variant="h2">Downloading Model</Header>}>
+            <SpaceBetween size="s">
+              <DownloadProgress progress={downloadProgress} message={downloadMessage} />
+            </SpaceBetween>
+          </Container>
+        )}
+            
             <VoiceConfig
               language={language}
               speaker={speaker}
@@ -176,15 +184,6 @@ const TTSPage = () => {
             />
           </SpaceBetween>
         </Container>
-
-        {downloading && (
-          <Container header={<Header variant="h2">Downloading Model</Header>}>
-            <SpaceBetween size="s">
-              <TTSProgress progress={downloadProgress} />
-              {downloadMessage && <div>{downloadMessage}</div>}
-            </SpaceBetween>
-          </Container>
-        )}
 
         {synthesizing && (
           <TTSProgress progress={progress} />

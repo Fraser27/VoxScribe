@@ -165,6 +165,15 @@ const STTPage = () => {
               onRefreshModels={loadModels}
             />
             
+            {downloading && (
+            <Container header={<Header variant="h2">Downloading Model</Header>}>
+               <SpaceBetween size="s">
+                <TranscriptionProgress progress={downloadProgress} />
+                {downloadMessage && <div>{downloadMessage}</div>}
+              </SpaceBetween>
+            </Container>
+            )}
+            
             <FileUpload
               audioFile={audioFile}
               onFileSelect={setAudioFile}
@@ -181,15 +190,6 @@ const STTPage = () => {
             />
           </SpaceBetween>
         </Container>
-
-        {downloading && (
-          <Container header={<Header variant="h2">Downloading Model</Header>}>
-            <SpaceBetween size="s">
-              <TranscriptionProgress progress={downloadProgress} />
-              {downloadMessage && <div>{downloadMessage}</div>}
-            </SpaceBetween>
-          </Container>
-        )}
 
         {transcribing && (
           <TranscriptionProgress progress={progress} />
