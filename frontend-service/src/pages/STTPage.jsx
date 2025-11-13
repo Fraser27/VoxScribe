@@ -24,6 +24,9 @@ const STTPage = () => {
   const [transcribing, setTranscribing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadMessage, setDownloadMessage] = useState('');
   const { messages } = useWebSocket();
 
   useEffect(() => {
@@ -33,11 +36,33 @@ const STTPage = () => {
 
   useEffect(() => {
     messages.forEach((msg) => {
-      if (msg.type === 'transcription_progress') {
+      // Handle download progress for STT models
+      if (msg.type === 'download_progress') {
+        console.log('STT download progress:', msg);
+        setDownloading(true);
+        setDownloadProgress(msg.progress || 0);
+        setDownloadMessage(msg.message || `Downloading ${msg.engine}/${msg.model_id}...`);
+        
+        // Clear download state when complete
+        if (msg.status === 'complete' || msg.status === 'error') {
+          setTimeout(() => {
+            setDownloading(false);
+            setDownloadProgress(0);
+            setDownloadMessage('');
+          }, 2000);
+        }
+      } else if (msg.type === 'download_complete') {
+        console.log('STT download complete:', msg);
+        loadModels();
+        setDownloading(false);
+        setDownloadProgress(0);
+        setDownloadMessage('');
+      } else if (msg.type === 'transcription_progress') {
         setProgress(msg.progress || 0);
       } else if (msg.type === 'transcription_complete') {
-        setTranscribing(false);
-        setResults(msg.data);
+        setTimeout(() => {
+            setTranscribing(false);  
+        }, 2000);
       }
     });
   }, [messages]);
@@ -156,6 +181,15 @@ const STTPage = () => {
             />
           </SpaceBetween>
         </Container>
+
+        {downloading && (
+          <Container header={<Header variant="h2">Downloading Model</Header>}>
+            <SpaceBetween size="s">
+              <TranscriptionProgress progress={downloadProgress} />
+              {downloadMessage && <div>{downloadMessage}</div>}
+            </SpaceBetween>
+          </Container>
+        )}
 
         {transcribing && (
           <TranscriptionProgress progress={progress} />

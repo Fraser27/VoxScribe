@@ -11,6 +11,7 @@ import TTSActions from '../components/tts/TTSActions';
 import TTSProgress from '../components/tts/TTSProgress';
 import TTSResults from '../components/tts/TTSResults';
 import ServiceStatus from '../components/common/ServiceStatus';
+import { useWebSocket } from '../contexts/WebSocketContext';
 
 const TTSPage = () => {
   const [mode, setMode] = useState('single');
@@ -24,10 +25,50 @@ const TTSPage = () => {
   const [synthesizing, setSynthesizing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [results, setResults] = useState(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadMessage, setDownloadMessage] = useState('');
+  const { messages } = useWebSocket();
 
   useEffect(() => {
     loadModels();
   }, []);
+
+  // Listen for WebSocket messages
+  useEffect(() => {
+    messages.forEach((msg) => {
+      // Handle download progress for TTS models
+      if (msg.type === 'download_progress') {
+        console.log('TTS download progress:', msg);
+        setDownloading(true);
+        setDownloadProgress(msg.progress || 0);
+        setDownloadMessage(msg.message || `Downloading... ${msg.engine}/${msg.model_id}...`);
+        
+        // Clear download state when complete
+        if (msg.status === 'complete' || msg.status === 'error') {
+          setTimeout(() => {
+            setDownloading(false);
+            setDownloadProgress(0);
+            setDownloadMessage('');
+            loadModels();
+          }, 2000);
+        }
+      } else if (msg.type === 'download_complete') {
+        console.log('TTS download complete:', msg);
+        loadModels();
+        setDownloading(false);
+        setDownloadProgress(0);
+        setDownloadMessage('');
+      } else if (msg.type === 'synthesis_progress') {
+        setProgress(msg.progress || 0);
+      } else if (msg.type === 'synthesis_complete') {
+        setSynthesizing(false);
+        if (msg.success) {
+          console.log('Synthesis completed via WebSocket');
+        }
+      }
+    });
+  }, [messages]);
 
   const loadModels = async () => {
     try {
@@ -135,6 +176,15 @@ const TTSPage = () => {
             />
           </SpaceBetween>
         </Container>
+
+        {downloading && (
+          <Container header={<Header variant="h2">Downloading Model</Header>}>
+            <SpaceBetween size="s">
+              <TTSProgress progress={downloadProgress} />
+              {downloadMessage && <div>{downloadMessage}</div>}
+            </SpaceBetween>
+          </Container>
+        )}
 
         {synthesizing && (
           <TTSProgress progress={progress} />
