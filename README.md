@@ -111,52 +111,22 @@ Startups transcribing speech at scale face a common dilemma: **cost vs. control*
    sudo dnf install git -y
    ```
 
-4. **Install Miniconda**
-   ```bash
-   wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-   bash Miniconda3-latest-Linux-x86_64.sh
-   ```
-   - Accept the license agreement (type `yes`)
-   - Confirm installation location (default is fine)
-   - Initialize Conda (type `yes` when prompted)
-
-5. **Restart your shell or source bashrc**
-   ```bash
-   source ~/.bashrc
-   ```
-
-6. **Create and activate conda environment**
-   ```bash
-   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
-   conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
-   conda create -n voxscribe python=3.12 -y
-   conda activate voxscribe
-   ```
-
-7. **Install ffmpeg in Conda env**
-   ```bash
-   conda install ffmpeg -y
-   ```
-
-8. **Clone the repository**
+4. **Install Docker and Docker Compose**
+   
+5. **Clone the repository**
    ```bash
    git clone https://github.com/Fraser27/VoxScribe.git
    cd VoxScribe
    ```
 
-9. **Install Python dependencies**
+6. **Trigger bash file**
    ```bash
-   pip install -r requirements.txt
+   sh docker-build-manual.sh
    ```
 
-10. **Start the application**
-   ```bash
-   python run.py
-   ```
-
-11. **Open your browser**
+7. **Open the browser**
     ```
-    http://localhost:8000
+    http://<<public-ip-address-of-ec2>>:8000
     ```
 
 ## API Endpoints
